@@ -38,7 +38,7 @@ export const TRANSLATIONS: Record<Language, Translation> = {
     cmdPhysical: "Physical",
     cmdMagAtk: "Mag. Atk",
     cmdMagHeal: "Mag. Heal",
-    cmdItem: "Item",
+    cmdItem: "Potion Heal",
     cmdFlee: "Run",
     enemyAppears: (name) => `A wild ${name} gobbles loudly!`,
     playerAttack: (dmg) => `Sword Strike! ${dmg.toLocaleString()} damage!`,
@@ -54,8 +54,8 @@ export const TRANSLATIONS: Record<Language, Translation> = {
     runSuccess: "Escaped to fight another day!",
     runFail: "The Turkey blocks the way!",
     heal: (amt) => `Healing Light! Recovered ${amt.toLocaleString()} HP.`,
-    itemUsed: (name) => `Hero used ${name}.`,
-    noItem: "Empty pockets!",
+    itemUsed: (name) => `Hero used Potion Heal.`,
+    noItem: "No Potions left!",
     noMp: "Not enough MP!",
     locations: {
       forest: "Feather Woods",
@@ -82,7 +82,7 @@ export const TRANSLATIONS: Record<Language, Translation> = {
         rest: (cost) => `Rest & Heal (${cost.toLocaleString()}G)`,
         buyWeapon: (cost) => `Sharpen Sword (+3 ATK) - ${cost.toLocaleString()}G`,
         buyArmor: (cost) => `Reinforce Shield (+3 DEF) - ${cost.toLocaleString()}G`,
-        buyPotion: (cost) => `Buy Potion - ${cost.toLocaleString()}G`,
+        buyPotion: (cost) => `Buy Red Potion - ${cost.toLocaleString()}G`,
         buyMagic: (cost) => `Study Scrolls (+5 MaxMP) - ${cost.toLocaleString()}G`,
         leave: "Leave Shop"
       },
@@ -123,7 +123,7 @@ export const TRANSLATIONS: Record<Language, Translation> = {
     lvl: "等級",
     atk: "攻擊",
     def: "防禦",
-    potions: "道具",
+    potions: "藥水",
     naming: {
       title: "請輸入勇者姓名",
       placeholder: "輸入姓名",
@@ -147,7 +147,7 @@ export const TRANSLATIONS: Record<Language, Translation> = {
     cmdPhysical: "物理攻擊",
     cmdMagAtk: "魔法攻擊",
     cmdMagHeal: "魔法治癒",
-    cmdItem: "使用道具",
+    cmdItem: "藥水治癒",
     cmdFlee: "轉身逃跑",
     enemyAppears: (name) => `兇猛的 ${name} 出現了！`,
     playerAttack: (dmg) => `勇者的斬擊！給予火雞 ${dmg.toLocaleString()} 點傷害！`,
@@ -163,8 +163,8 @@ export const TRANSLATIONS: Record<Language, Translation> = {
     runSuccess: "勇者成功逃走了！",
     runFail: "被翅膀擋住了！無法逃跑！",
     heal: (amt) => `勇者施放聖光術！恢復了 ${amt.toLocaleString()} 點生命。`,
-    itemUsed: (name) => `勇者使用了${name}。`,
-    noItem: "沒有道具了！",
+    itemUsed: (name) => `勇者使用了藥水治癒。`,
+    noItem: "沒有藥水了！",
     noMp: "MP 不足！",
     locations: {
       forest: "落羽之森",
@@ -191,7 +191,7 @@ export const TRANSLATIONS: Record<Language, Translation> = {
         rest: (cost) => `休息回復 (${cost.toLocaleString()}G)`,
         buyWeapon: (cost) => `強化武器 (+3 攻擊) - ${cost.toLocaleString()}G`,
         buyArmor: (cost) => `強化防具 (+3 防禦) - ${cost.toLocaleString()}G`,
-        buyPotion: (cost) => `購買回復藥水 - ${cost.toLocaleString()}G`,
+        buyPotion: (cost) => `購買紅色藥水 - ${cost.toLocaleString()}G`,
         buyMagic: (cost) => `研讀古卷 (+5 MaxMP) - ${cost.toLocaleString()}G`,
         leave: "離開設施"
       },
@@ -222,19 +222,18 @@ export const TRANSLATIONS: Record<Language, Translation> = {
   }
 };
 
-// Balanced Initial Player (Buffed as requested)
 export const INITIAL_PLAYER = {
   name: "Anne", 
   level: 1,
-  hp: 250,      // Director requested buff
-  maxHp: 250,   // Director requested buff
-  mp: 50,       // Director requested buff
-  maxMp: 50,    // Director requested buff
+  hp: 250,      
+  maxHp: 250,   
+  mp: 50,       
+  maxMp: 50,    
   exp: 0,
   gold: 0,
   potions: 0,
-  equipmentAtk: 10, // Start with a stick
-  equipmentDef: 10  // Start with clothes
+  equipmentAtk: 10,
+  equipmentDef: 10 
 };
 
 export const GOD_MODE_PLAYER = {
@@ -244,21 +243,24 @@ export const GOD_MODE_PLAYER = {
   maxHp: 10000,
   mp: 10000,
   maxMp: 10000,
-  exp: 0,          // Set to 0 to see progress
+  exp: 0,
   gold: 1000000,
   potions: 99,
   equipmentAtk: 500,
-  equipmentDef: 0  // Set to 0 to feel damage
+  equipmentDef: 0
 };
 
-// Updated Anne Sprite: Red hair, pigtails (long02), slim face (Zoey seed helps)
-export const PLAYER_SPRITE_URL = "https://api.dicebear.com/9.x/adventurer/svg?seed=Zoey&hair=long02&hairColor=e53935&skinColor=f5d0c5&backgroundColor=b6e3f4";
+// Updated Player Sprite: Chess Knight (Horse)
+export const PLAYER_SPRITE_URL = "https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg";
 
-// Fallback: A generic pixel art turkey icon (DiceBear pixel art with turkey keyword seed often gives random stuff, so we use a reliable turkey-like fallback if AI fails)
-export const MONSTER_FALLBACK_URL = "https://api.dicebear.com/9.x/pixel-art/svg?seed=TurkeyMonster&backgroundColor=b6e3f4"; 
+// Potion Icon: Red Bottle (Data URI to ensure it always loads)
+export const POTION_ICON_URL = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none'><path d='M35 25 h30 v10 h-10 v15 h15 a5 5 0 0 1 5 5 v30 a10 10 0 0 1 -10 10 h-40 a10 10 0 0 1 -10 -10 v-30 a5 5 0 0 1 5 -5 h15 v-15 h-10 z' fill='%23e11d48' stroke='%23fff' stroke-width='2'/><path d='M40 20 h20 v5 h-20 z' fill='%239f1239'/></svg>";
+
+// Fallback: A generic pixel art turkey icon (Roasted chicken style)
+export const MONSTER_FALLBACK_URL = "https://cdn-icons-png.flaticon.com/512/1895/1895685.png"; 
 
 // Realistic Badge for Title
-export const TITLE_BADGE_URL = "https://images.unsplash.com/photo-1626548307930-deac221f87d9?q=80&w=1000&auto=format&fit=crop";
+export const TITLE_BADGE_URL = "https://images.unsplash.com/photo-1618519764620-7403abdbdfe9?q=80&w=600&auto=format&fit=crop"; 
 
 // Enhanced resolution seeds
 export const LOCATION_IMAGES = {
@@ -268,7 +270,7 @@ export const LOCATION_IMAGES = {
   castle: "https://images.unsplash.com/photo-1519074069444-1ba4fff66d16?q=80&w=1200&auto=format&fit=crop"
 };
 
-// Shop NPCs (Pixel Art Avatars)
+// Shop NPCs
 export const SHOP_IMAGES = {
   guild: "https://api.dicebear.com/9.x/pixel-art/svg?seed=GuildMaster&clothing=armor&hair=long",
   weapon: "https://api.dicebear.com/9.x/pixel-art/svg?seed=Blacksmith&beard=variant04",
@@ -292,33 +294,33 @@ export const LOOT_NAMES = {
 
 export const TILE_COLORS: Record<TileType | TownTileType, string> = {
   W: 'bg-blue-600',
-  G: 'bg-green-500',
-  F: 'bg-green-800',
+  G: 'bg-green-700',
+  F: 'bg-green-900',
   M: 'bg-gray-600',
   V: 'bg-red-700',
   C: 'bg-yellow-600',
-  H: 'bg-emerald-700', // House / Green Gables
-  K: 'bg-blue-400', // School
-  U: 'bg-purple-600', // University
+  H: 'bg-emerald-700',
+  K: 'bg-blue-400',
+  U: 'bg-purple-600',
   
   // Town specific
-  _: 'bg-gray-900', // Wall
-  S: 'bg-yellow-900', // Path/Floor
-  A: 'bg-gray-400', // Armor
-  I: 'bg-yellow-700', // Item
-  E: 'bg-red-900', // Exit
+  _: 'bg-gray-900',
+  S: 'bg-yellow-900',
+  A: 'bg-gray-400',
+  I: 'bg-yellow-700',
+  E: 'bg-red-900',
 };
 
 export const TILE_ICONS: Record<TileType | TownTileType, string> = {
   W: '🌊',
-  G: '🌱',
+  G: '', 
   F: '🌲',
   M: '⛰️',
   V: '🌋',
   C: '🏰',
-  H: '🏡', // Green Gables
-  K: '🏫', // School
-  U: '🏛️', // University
+  H: '🏡', 
+  K: '🏫', 
+  U: '🏛️',
 
   _: '🧱',
   S: '🟫',
@@ -327,42 +329,31 @@ export const TILE_ICONS: Record<TileType | TownTileType, string> = {
   E: '🚪'
 };
 
-// Encounter Rates (0-1)
 export const ENCOUNTER_RATES: Record<TileType, number> = {
   W: 0,
   C: 0,
   H: 0,
   K: 0,
   U: 0,
-  G: 0.1,  // 10% on Grass
-  F: 0.2,  // 20% in Forest
-  M: 0.3,  // 30% in Mountain
-  V: 0.4   // 40% in Volcano
+  G: 0.1,  
+  F: 0.2,  
+  M: 0.3,  
+  V: 0.4   
 };
 
-// MAP DESIGN NOTES:
-// Town (C) is usually start. Dungeon (V) is usually end.
-// Special Tile (H, K, U) is placed between Town and Dungeon, slightly lower, 4 tiles away from V.
-// Assuming 15x10 grid.
-
-// SCENE 1: AVONLEA
-// Town (C) at (2,2). Dungeon (V) at (12,2).
-// H (Green Gables) target: x=8 or 9, y=6.
 export const MAP_AVONLEA: TileType[][] = [
   ['W','W','W','W','W','W','W','W','W','W','W','W','W','W','W'],
   ['W','G','G','G','F','F','F','M','M','M','M','M','F','F','W'],
-  ['W','G','C','G','F','F','G','G','M','M','M','F','V','F','W'], // C: Town, V: Dungeon
+  ['W','G','C','G','F','F','G','G','M','M','M','F','V','F','W'],
   ['W','G','G','G','F','F','F','M','M','M','F','F','F','M','W'],
   ['W','G','G','F','F','F','F','M','M','M','M','F','M','M','W'],
-  ['W','G','G','F','F','F','F','F','M','M','M','M','M','W','W'],
-  ['W','G','G','G','F','F','F','F','G','H','M','M','W','W','W'], // H: Green Gables (Between C and V, Lower)
+  ['W','G','G','F','F','F','F','F','G','G','G','M','M','W','W'],
+  ['W','G','G','G','F','F','F','F','G','H','G','M','W','W','W'],
   ['W','W','G','G','G','G','G','G','G','G','G','W','W','W','W'],
   ['W','W','W','W','G','G','G','G','G','W','W','W','W','W','W'],
   ['W','W','W','W','W','W','W','W','W','W','W','W','W','W','W'],
 ];
 
-// SCENE 2: CAVENDISH
-// K (School)
 export const MAP_CAVENDISH: TileType[][] = [
     ['W','W','W','W','W','W','W','W','W','W','W','W','W','W','W'],
     ['W','G','G','G','G','G','G','G','F','F','M','M','M','M','W'],
@@ -370,14 +361,12 @@ export const MAP_CAVENDISH: TileType[][] = [
     ['W','G','G','G','F','F','F','M','M','M','F','F','F','F','W'],
     ['W','G','G','F','F','F','F','G','G','G','G','G','G','G','W'],
     ['W','G','G','F','F','F','F','F','G','G','G','G','G','W','W'],
-    ['W','G','G','G','F','F','F','F','G','K','M','M','W','W','W'], // K: School
+    ['W','G','G','G','F','F','F','F','G','K','G','M','W','W','W'],
     ['W','W','G','G','G','G','G','G','G','G','G','W','W','W','W'],
     ['W','W','W','W','G','G','G','G','G','W','W','W','W','W','W'],
     ['W','W','W','W','W','W','W','W','W','W','W','W','W','W','W'],
 ];
 
-// SCENE 3: CHARLOTTETOWN
-// U (Academy)
 export const MAP_CHARLOTTETOWN: TileType[][] = [
   ['W','W','W','W','W','W','W','W','W','W','W','W','W','W','W'],
   ['W','G','G','G','G','G','G','G','M','M','M','M','M','M','W'],
@@ -385,13 +374,12 @@ export const MAP_CHARLOTTETOWN: TileType[][] = [
   ['W','G','G','G','F','F','F','M','M','M','G','G','G','G','W'],
   ['W','G','G','F','F','F','F','G','G','G','G','G','G','G','W'],
   ['W','G','G','F','F','F','F','F','G','G','G','G','G','W','W'],
-  ['W','G','G','G','F','F','F','F','G','U','M','M','W','W','W'], // U: Academy
+  ['W','G','G','G','F','F','F','F','G','U','G','M','W','W','W'],
   ['W','W','G','G','G','G','G','G','G','G','G','W','W','W','W'],
   ['W','W','W','W','G','G','G','G','G','W','W','W','W','W','W'],
   ['W','W','W','W','W','W','W','W','W','W','W','W','W','W','W'],
 ];
 
-// 15x9 Town Map
 export const TOWN_MAP: TownTileType[][] = [
     ['_','_','_','_','_','_','G','_','_','_','_','_','_','_','_'],
     ['_','_','_','_','_','S','S','S','_','_','_','_','_','_','_'],

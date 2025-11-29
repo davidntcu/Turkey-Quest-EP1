@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { RetroWindow, RetroButton } from './components/RetroUI';
+import { RetroWindow, RetroButton, TitleBadge } from './components/RetroUI';
 import { VirtualPad } from './components/VirtualPad';
 import { generateDinosaur } from './services/geminiService';
 import { audioService } from './services/audioService';
@@ -22,7 +22,7 @@ import {
   TILE_ICONS,
   ENCOUNTER_RATES,
   PLAYER_SPRITE_URL,
-  TITLE_BADGE_URL
+  POTION_ICON_URL
 } from './constants';
 
 const App: React.FC = () => {
@@ -46,7 +46,7 @@ const App: React.FC = () => {
   const [showLoadMenu, setShowLoadMenu] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [notification, setNotification] = useState("");
-  const [hasSaves, setHasSaves] = useState(false); // New state to track if any saves exist
+  const [hasSaves, setHasSaves] = useState(false);
 
   // World Map State
   const [currentScene, setCurrentScene] = useState<SceneType>('AVONLEA');
@@ -63,6 +63,9 @@ const App: React.FC = () => {
   const [dungeonProgress, setDungeonProgress] = useState<DungeonProgress>({ b1Cleared: false, b2Cleared: false, scene2Unlocked: false });
   const [selectedLocation, setSelectedLocation] = useState<keyof typeof LOCATION_IMAGES | null>(null);
   const [exploreLog, setExploreLog] = useState<string>("");
+  
+  // Input Lock Cooldown
+  const [inputCooldown, setInputCooldown] = useState(false);
 
   // Helpers
   const t = TRANSLATIONS[lang];
@@ -79,17 +82,21 @@ const App: React.FC = () => {
     audioService.init().catch(console.error);
     
     // Global click handler for Victory/Defeat states to return to map
-    if (battleState === BattleState.VICTORY || battleState === BattleState.DEFEAT) {
+    // FIX: Only trigger if actually in Battle scene to prevent stale state bugs
+    if (gameState === GameState.BATTLE && (battleState === BattleState.VICTORY || battleState === BattleState.DEFEAT)) {
         handleInput('ENTER');
     }
   };
 
   const toggleMute = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent triggering other click handlers
-    handleUserInteraction();
+    // FIX: Just init audio directly, don't call handleUserInteraction to avoid side effects
+    audioService.init().catch(console.error);
+    
     const muted = audioService.toggleMute();
     setIsMuted(muted);
-    audioService.playSfx('SELECT');
+    // Play sound only if not muted
+    if (!muted) audioService.playSfx('SELECT');
   };
 
   // Check for saves on mount
@@ -425,6 +432,9 @@ const App: React.FC = () => {
 
   // Dungeon Logic
   const processExploration = (action: 'FORWARD' | 'SEARCH' | 'DEEPER' | 'SURFACE') => {
+    // Prevents accidental double triggers
+    if (inputCooldown) return;
+
     audioService.playSfx('SELECT');
 
     if (action === 'DEEPER') {
@@ -555,6 +565,9 @@ const App: React.FC = () => {
           await new Promise(r => setTimeout(r, 1000));
           // Return to where we came from
           setGameState(prevGameState);
+          // Set cooldown to prevent accidental clicks
+          setInputCooldown(true);
+          setTimeout(() => setInputCooldown(false), 500);
           return;
         } else {
           audioService.playSfx('CANCEL');
@@ -577,17 +590,24 @@ const App: React.FC = () => {
       // Apply costs if magic used in the killing blow
       if (action === 'MAG_ATK') newPlayer.mp -= 5; 
 
-      const newExp = newPlayer.exp + expGain;
-      const levelUp = newExp >= newPlayer.level * 50;
+      // --- Multi-Level Up Logic (Director's Request) ---
+      newPlayer.exp += expGain;
+      newPlayer.gold += goldGain;
       
-      newPlayer.exp = newExp;
-      newPlayer.gold = newPlayer.gold + goldGain;
-      if (levelUp) {
+      let leveledUp = false;
+      let nextLevelCost = newPlayer.level * 50;
+
+      // Loop to handle multiple level ups if EXP is huge
+      while (newPlayer.exp >= nextLevelCost) {
+          newPlayer.exp -= nextLevelCost; // Subtract cost
           newPlayer.level += 1;
           newPlayer.maxHp += 10;
           newPlayer.maxMp += 5;
-          newPlayer.hp = newPlayer.maxHp;
+          newPlayer.hp = newPlayer.maxHp; // Heal on level up
           newPlayer.mp = newPlayer.maxMp;
+          
+          nextLevelCost = newPlayer.level * 50; // Update cost for next iteration
+          leveledUp = true;
       }
 
       // Loot Logic
@@ -616,12 +636,12 @@ const App: React.FC = () => {
          }
       } else if (lootRoll > 0.40) { // 35% Chance for Potion
           newPlayer.potions += 1;
-          lootMsg = t.loot.found(t.cmdItem);
+          lootMsg = t.loot.found(t.potions);
       }
 
       setPlayer(newPlayer); // Update State
       
-      if (levelUp) {
+      if (leveledUp) {
           addLog(`Level Up! You are now level ${newPlayer.level}!`);
           setTimeout(() => audioService.playSfx('WIN'), 500);
       } else {
@@ -736,8 +756,8 @@ const App: React.FC = () => {
   };
 
   const handleInput = useCallback((key: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'ENTER') => {
-    // Strict Input Locking when loading (e.g. generating monster)
-    if (loading || showSaveMenu || showLoadMenu || notification) return;
+    // Strict Input Locking
+    if (loading || showSaveMenu || showLoadMenu || notification || inputCooldown) return;
 
     // Name Input Handling is separate from main logic
     if (gameState === GameState.NAME_INPUT) {
@@ -876,9 +896,6 @@ const App: React.FC = () => {
     }
     else if (gameState === GameState.DUNGEON) {
         // Dungeon Menu
-        // B1: Forward, Search, (NextFloor if clear), Leave
-        // B2: Forward, Search, (Surface if clear), Leave
-        
         let options = ['FORWARD', 'SEARCH', 'LEAVE'];
         if (dungeonFloor === 1 && dungeonProgress.b1Cleared) options = ['FORWARD', 'SEARCH', 'DEEPER', 'LEAVE'];
         if (dungeonFloor === 2 && dungeonProgress.b2Cleared) options = ['FORWARD', 'SEARCH', 'SURFACE', 'LEAVE'];
@@ -904,14 +921,20 @@ const App: React.FC = () => {
     }
     else if ((battleState === BattleState.VICTORY || battleState === BattleState.DEFEAT) && key === 'ENTER') {
         audioService.playSfx('CONFIRM');
+        
+        // FIX: Reset BattleState here to prevent stale state persisting into Map
+        setBattleState(BattleState.PLAYER_INPUT);
+
         if (battleState === BattleState.VICTORY) {
             // Return to previous location based on context
-            // If previous state was MAP, stay in MAP. If Dungeon, stay in Dungeon.
             if (prevGameState === GameState.MAP || prevGameState === GameState.DUNGEON) {
                  setGameState(prevGameState);
             } else {
                  setGameState(GameState.MAP); // Fallback
             }
+            // Set cooldown to prevent immediate click of dungeon menu
+            setInputCooldown(true);
+            setTimeout(() => setInputCooldown(false), 500);
             setMenuIndex(0);
         } else {
             setPlayer(prev => {
@@ -931,12 +954,12 @@ const App: React.FC = () => {
             setMenuIndex(0);
         }
     }
-  }, [gameState, menuIndex, battleState, loading, player, enemy, lang, selectedLocation, playerPos, townPlayerPos, activeShop, currentScene, dungeonFloor, dungeonProgress, showSaveMenu, showLoadMenu, playerNameInput, notification, prevGameState]);
+  }, [gameState, menuIndex, battleState, loading, player, enemy, lang, selectedLocation, playerPos, townPlayerPos, activeShop, currentScene, dungeonFloor, dungeonProgress, showSaveMenu, showLoadMenu, playerNameInput, notification, prevGameState, inputCooldown]);
 
   // Click handler for tiles
   const handleMapClick = (targetX: number, targetY: number, type: 'WORLD' | 'TOWN') => {
       // Prevent click interactions if loading
-      if (loading || showSaveMenu || showLoadMenu || notification) return;
+      if (loading || showSaveMenu || showLoadMenu || notification || inputCooldown) return;
 
       handleUserInteraction();
       const currentPos = type === 'WORLD' ? playerPos : townPlayerPos;
@@ -1062,7 +1085,7 @@ const App: React.FC = () => {
   };
 
   const renderTitle = () => (
-    <div className="relative w-full h-full flex flex-col items-center justify-center text-center animate-fade-in">
+    <div className="relative w-full h-full flex flex-col items-center justify-center text-center animate-fade-in p-4">
        <div 
           className="absolute inset-0 z-0 opacity-60" 
           style={{ 
@@ -1074,7 +1097,7 @@ const App: React.FC = () => {
        ></div>
        
        <div className="z-10 flex flex-col items-center w-full max-w-4xl">
-          {/* Realistic Badge - Click for God Mode */}
+          {/* SVG Badge - Click for God Mode */}
           <div 
               className="mb-4 drop-shadow-[0_10px_20px_rgba(0,0,0,0.8)] animate-bounce-slight cursor-pointer hover:scale-105 transition-transform"
               onClick={(e) => {
@@ -1087,17 +1110,13 @@ const App: React.FC = () => {
               }}
               title="???"
           >
-             <img 
-                src={TITLE_BADGE_URL} 
-                alt="Turkey Quest Badge" 
-                className="w-[180px] h-[180px] object-contain drop-shadow-[0_0_15px_rgba(255,215,0,0.6)]"
-             />
+             <TitleBadge className="w-32 h-32 md:w-48 md:h-48" />
           </div>
 
-          <h1 className="text-7xl md:text-9xl text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-red-600 drop-shadow-[0_5px_5px_rgba(0,0,0,1)] font-bold tracking-widest leading-none mb-4 font-['VT323'] whitespace-nowrap">
+          <h1 className="text-5xl md:text-9xl text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-red-600 drop-shadow-[0_5px_5px_rgba(0,0,0,1)] font-bold tracking-widest leading-none mb-4 font-['VT323'] whitespace-nowrap">
             {t.title}
           </h1>
-          <p className="text-lg md:text-2xl text-yellow-100 drop-shadow-md mb-12 tracking-wider bg-black/60 px-6 py-2 rounded-full border border-yellow-800/50">
+          <p className="text-sm md:text-2xl text-yellow-100 drop-shadow-md mb-8 tracking-wider bg-black/60 px-6 py-2 rounded-full border border-yellow-800/50">
              {lang === Language.ZH ? 'EP1：勇者與清秀佳人在愛德華王子島的冒險' : 'EP1: The Adventure of the Hero and Anne on Prince Edward Island'}
           </p>
 
@@ -1147,9 +1166,9 @@ const App: React.FC = () => {
     const showCavendish = (currentScene === 'AVONLEA' && dungeonProgress.b1Cleared) || currentScene === 'CHARLOTTETOWN';
 
     return (
-    <div className="flex flex-row h-full bg-black gap-2">
+    <div className="flex flex-col md:flex-row h-full bg-black gap-2">
       {/* Left Panel: Status */}
-      <div className="w-1/4 min-w-[200px] flex flex-col gap-2">
+      <div className="w-full md:w-1/4 min-w-[200px] flex flex-col gap-2 order-1">
          <RetroWindow className="flex justify-between items-center py-2 bg-slate-900 border-slate-500">
              <h2 className="text-base lg:text-xl text-yellow-300 tracking-wider flex items-center gap-2">
                  <span>🗺️</span> {t.worldMapName}
@@ -1161,28 +1180,28 @@ const App: React.FC = () => {
       </div>
       
       {/* Right Panel: Map */}
-      <div className="flex-1 flex flex-col bg-gray-900 overflow-hidden relative border-4 border-gray-700 rounded p-4 items-center justify-center">
-          <span className="absolute top-2 left-2 z-10 text-xl font-bold text-yellow-300 bg-black/50 px-3 py-1 border border-yellow-600 rounded">
+      <div className="flex-1 flex flex-col bg-gray-900 overflow-hidden relative border-4 border-gray-700 rounded p-4 items-center justify-center order-2">
+          <span className="absolute top-2 left-2 z-10 text-lg md:text-xl font-bold text-yellow-300 bg-black/50 px-3 py-1 border border-yellow-600 rounded">
               {mapName}
           </span>
-          <span className="absolute bottom-2 right-2 z-10 text-sm text-gray-300 animate-pulse bg-black/50 px-2 rounded">
+          <span className="absolute bottom-2 right-2 z-10 text-xs md:text-sm text-gray-300 animate-pulse bg-black/50 px-2 rounded">
               {mapMessage || "Navigate with Arrow Keys or Click"}
           </span>
           
           {/* Fast Travel Buttons */}
           <div className="absolute top-2 right-2 z-20 flex flex-col gap-2">
               {showCharlottetown && (
-                  <button onClick={() => switchScene('CHARLOTTETOWN')} className="bg-blue-800 text-white px-3 py-1 border border-white hover:bg-blue-600 text-sm font-bold">
+                  <button onClick={() => switchScene('CHARLOTTETOWN')} className="bg-blue-800 text-white px-3 py-1 border border-white hover:bg-blue-600 text-xs md:text-sm font-bold">
                       ✈ {t.scenes.charlottetown}
                   </button>
               )}
                {showCavendish && (
-                  <button onClick={() => switchScene('CAVENDISH')} className="bg-purple-800 text-white px-3 py-1 border border-white hover:bg-purple-600 text-sm font-bold">
+                  <button onClick={() => switchScene('CAVENDISH')} className="bg-purple-800 text-white px-3 py-1 border border-white hover:bg-purple-600 text-xs md:text-sm font-bold">
                       ✈ Cavendish
                   </button>
               )}
               {showAvonlea && (
-                  <button onClick={() => switchScene('AVONLEA')} className="bg-green-800 text-white px-3 py-1 border border-white hover:bg-green-600 text-sm font-bold">
+                  <button onClick={() => switchScene('AVONLEA')} className="bg-green-800 text-white px-3 py-1 border border-white hover:bg-green-600 text-xs md:text-sm font-bold">
                       ✈ {t.scenes.avonlea}
                   </button>
               )}
@@ -1205,19 +1224,21 @@ const App: React.FC = () => {
                               key={`${x}-${y}`}
                               onClick={() => handleMapClick(x, y, 'WORLD')}
                               className={`
-                                relative flex items-center justify-center text-lg md:text-3xl select-none cursor-pointer hover:brightness-110
+                                relative flex items-center justify-center text-sm md:text-3xl select-none cursor-pointer hover:brightness-110
                                 ${TILE_COLORS[tile]}
                                 transition-colors duration-300
                               `}
                           >
                               <span className="opacity-80 scale-75 md:scale-100 drop-shadow-md">{TILE_ICONS[tile]}</span>
                               {isPlayerHere && (
-                                  <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-                                      <img 
-                                        src={PLAYER_SPRITE_URL} 
-                                        alt="Player" 
-                                        className="w-full h-full object-contain animate-bounce drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]" 
-                                      />
+                                  <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none p-1">
+                                      <div className="w-full h-full animate-bounce">
+                                        <img 
+                                            src={PLAYER_SPRITE_URL} 
+                                            alt="Player" 
+                                            className="w-full h-full object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] scale-x-[-1]" 
+                                        />
+                                      </div>
                                   </div>
                               )}
                           </div>
@@ -1246,34 +1267,35 @@ const App: React.FC = () => {
             if (activeShop === 'MAGIC') { shopName = t.town.shops.magic; npcImage = SHOP_IMAGES.magic; actionText = t.town.actions.buyMagic(200 * player.level); }
 
             return (
-                <div className="flex-1 relative flex flex-col border-4 border-yellow-700 rounded overflow-hidden bg-[#2a1d15]">
-                     <div className="flex-1 flex flex-col items-center justify-center p-8">
+                <div className="flex-1 relative flex flex-col border-4 border-yellow-700 rounded overflow-hidden bg-[#2a1d15] order-2">
+                     <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8">
                           {/* NPC Portrait */}
-                          <div className="bg-black/50 border-4 border-yellow-600 rounded-full p-2 mb-6 shadow-2xl">
+                          <div className="bg-black/50 border-4 border-yellow-600 rounded-full p-2 mb-4 md:mb-6 shadow-2xl">
                               <img 
                                 src={npcImage} 
                                 alt="Shop Keeper" 
-                                className="w-32 h-32 md:w-48 md:h-48 rounded-full object-cover bg-gray-800"
+                                className="w-24 h-24 md:w-48 md:h-48 rounded-full object-cover bg-gray-800"
                               />
                           </div>
                           
-                          <RetroWindow className="w-full max-w-lg mb-8 bg-black/80 border-yellow-500">
-                                <h2 className="text-3xl text-yellow-400 text-center border-b border-gray-600 pb-2 mb-2">{shopName}</h2>
-                                <p className="text-center text-white text-lg italic">"{townMessage || t.town.welcome}"</p>
+                          <RetroWindow className="w-full max-w-lg mb-4 md:mb-8 bg-black/80 border-yellow-500">
+                                <h2 className="text-xl md:text-3xl text-yellow-400 text-center border-b border-gray-600 pb-2 mb-2">{shopName}</h2>
+                                <p className="text-center text-white text-sm md:text-lg italic">"{townMessage || t.town.welcome}"</p>
                           </RetroWindow>
                           
                           <div className="w-full max-w-md space-y-4">
                               <RetroButton 
                                 active={menuIndex === 0}
                                 onClick={() => handleShopTransaction(0)}
-                                className="bg-blue-900/90 border-blue-400 py-4 text-xl"
+                                className="bg-blue-900/90 border-blue-400 py-2 md:py-4 text-sm md:text-xl"
                               >
+                                {activeShop === 'ITEM' && <span className="mr-2 text-red-500">🔴</span>}
                                 {actionText}
                               </RetroButton>
                               <RetroButton 
                                 active={menuIndex === 1}
                                 onClick={() => handleShopTransaction(1)}
-                                className="bg-red-900/90 border-red-400 py-4 text-xl"
+                                className="bg-red-900/90 border-red-400 py-2 md:py-4 text-sm md:text-xl"
                               >
                                 {t.town.actions.leave}
                               </RetroButton>
@@ -1284,8 +1306,8 @@ const App: React.FC = () => {
         } else {
             // TOWN MAP VIEW
             return (
-                <div className="flex-1 flex flex-col bg-slate-900 overflow-hidden relative border-4 border-slate-700 rounded p-4 items-center justify-center">
-                    <span className="absolute top-2 right-2 z-10 text-sm text-gray-300 bg-black/50 px-2 rounded">
+                <div className="flex-1 flex flex-col bg-slate-900 overflow-hidden relative border-4 border-slate-700 rounded p-4 items-center justify-center order-2">
+                    <span className="absolute top-2 right-2 z-10 text-xs md:text-sm text-gray-300 bg-black/50 px-2 rounded">
                         {townMessage || t.town.welcome}
                     </span>
                     <div 
@@ -1305,18 +1327,20 @@ const App: React.FC = () => {
                                         key={`${x}-${y}`}
                                         onClick={() => handleMapClick(x, y, 'TOWN')}
                                         className={`
-                                            relative flex items-center justify-center text-lg md:text-3xl select-none cursor-pointer hover:brightness-110
+                                            relative flex items-center justify-center text-sm md:text-3xl select-none cursor-pointer hover:brightness-110
                                             ${TILE_COLORS[tile]}
                                         `}
                                     >
                                         <span className="opacity-90 scale-75 md:scale-100 drop-shadow-md">{TILE_ICONS[tile]}</span>
                                         {isPlayerHere && (
-                                            <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-                                                <img 
-                                                    src={PLAYER_SPRITE_URL} 
-                                                    alt="Player" 
-                                                    className="w-full h-full object-contain animate-bounce drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]" 
-                                                />
+                                            <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none p-1">
+                                                <div className="w-full h-full animate-bounce">
+                                                    <img 
+                                                        src={PLAYER_SPRITE_URL} 
+                                                        alt="Player" 
+                                                        className="w-full h-full object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] scale-x-[-1]" 
+                                                    />
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -1330,9 +1354,9 @@ const App: React.FC = () => {
     };
 
     return (
-      <div className="flex flex-row h-full bg-slate-900 gap-2">
+      <div className="flex flex-col md:flex-row h-full bg-slate-900 gap-2">
          {/* Left: Stats */}
-         <div className="w-1/4 min-w-[200px]">
+         <div className="w-full md:w-1/4 min-w-[200px] order-1">
              <StatusPanel player={player} t={t} onSave={undefined} />
          </div>
          {/* Right: Town Map or Shop */}
@@ -1344,8 +1368,8 @@ const App: React.FC = () => {
   const renderDungeon = () => {
     // Determine menu options based on floor progress
     let options = [t.dungeon.forward, t.dungeon.search, t.dungeon.leave];
-    if (dungeonFloor === 1 && dungeonProgress.b1Cleared) options = [t.dungeon.forward, t.dungeon.search, t.dungeon.goDeeper, t.dungeon.leave];
-    if (dungeonFloor === 2 && dungeonProgress.b2Cleared) options = [t.dungeon.forward, t.dungeon.search, t.dungeon.returnSurface, t.dungeon.leave];
+    if (dungeonFloor === 1 && dungeonProgress.b1Cleared) options = ['FORWARD', 'SEARCH', 'DEEPER', 'LEAVE'];
+    if (dungeonFloor === 2 && dungeonProgress.b2Cleared) options = ['FORWARD', 'SEARCH', 'SURFACE', 'LEAVE'];
 
     // Simple mapper for button clicks
     const handleClick = (idx: number) => {
@@ -1358,9 +1382,9 @@ const App: React.FC = () => {
     }
 
     return (
-      <div className="flex flex-row h-full bg-red-950 gap-2">
+      <div className="flex flex-col md:flex-row h-full bg-red-950 gap-2">
           {/* Left Panel: Status + Menu */}
-          <div className="w-1/4 min-w-[220px] flex flex-col gap-2">
+          <div className="w-full md:w-1/4 min-w-[220px] flex flex-col gap-2 order-1">
                <RetroWindow className="bg-red-900/50 border-red-400 flex flex-row items-center justify-center p-2 gap-4">
                     <span className="text-3xl">💀</span>
                     <h2 className="text-xl text-red-300 animate-pulse whitespace-nowrap">
@@ -1390,19 +1414,19 @@ const App: React.FC = () => {
           </div>
 
           {/* Right Panel: Visuals & Log */}
-          <div className="flex-1 flex flex-col relative border-4 border-red-800 rounded bg-black overflow-hidden">
+          <div className="flex-1 flex flex-col relative border-4 border-red-800 rounded bg-black overflow-hidden order-2">
               <div 
-                  className="absolute inset-0 opacity-40 blur-sm"
-                  style={{ backgroundImage: `url(${selectedLocation ? LOCATION_IMAGES[selectedLocation] : ''})`, backgroundSize: 'cover' }}
+                  className="absolute inset-0 opacity-40 blur-sm pointer-events-none"
+                  style={{ backgroundImage: `url("${selectedLocation ? LOCATION_IMAGES[selectedLocation] : ''}")`, backgroundSize: 'cover' }}
               ></div>
               
-              <div className="z-10 flex-1 flex flex-col p-6 items-center justify-center">
+              <div className="z-10 flex-1 flex flex-col p-6 items-center justify-center pointer-events-none">
                    {/* Main Log Display Area */}
-                   <RetroWindow className="w-full max-w-3xl h-full flex flex-col justify-center items-center text-center bg-black/80 border-red-500 shadow-[0_0_15px_rgba(220,38,38,0.4)]">
-                        <div className="text-3xl text-red-100 font-bold mb-4">
+                   <RetroWindow className="w-full max-w-3xl h-full flex flex-col justify-center items-center text-center bg-black/80 border-red-500 shadow-[0_0_15px_rgba(220,38,38,0.4)] pointer-events-auto">
+                        <div className="text-2xl md:text-3xl text-red-100 font-bold mb-4">
                             {exploreLog.split('!')[0]}...
                         </div>
-                        <div className="text-xl text-gray-300">
+                        <div className="text-lg md:text-xl text-gray-300">
                              {exploreLog}
                         </div>
                    </RetroWindow>
@@ -1443,20 +1467,19 @@ const App: React.FC = () => {
   };
 
   const renderBattle = () => (
-    <div className="flex flex-row h-full relative gap-2 bg-black">
+    <div className="flex flex-col md:flex-row h-full relative gap-2 bg-black">
       {/* Left Panel: Status */}
-      <div className="w-1/4 min-w-[200px] flex flex-col">
+      <div className="w-full md:w-1/4 min-w-[200px] flex flex-col order-1">
           <StatusPanel player={player} t={t} onSave={undefined} /> 
-          {/* Cannot save during battle */}
       </div>
 
       {/* Right Panel: Scene + Actions */}
-      <div className="flex-1 flex flex-col h-full gap-2">
+      <div className="flex-1 flex flex-col h-full gap-2 order-2">
           {/* Top: Scene */}
           <div 
             className="flex-[2] relative bg-black border-4 border-white rounded overflow-hidden flex items-center justify-center bg-cover bg-center transition-all duration-500"
             style={{ 
-                backgroundImage: selectedLocation ? `url(${LOCATION_IMAGES[selectedLocation]})` : 'none',
+                backgroundImage: selectedLocation ? `url("${LOCATION_IMAGES[selectedLocation]}")` : 'none',
             }}
           >
             <div className="absolute inset-0 bg-black/60"></div>
@@ -1464,33 +1487,33 @@ const App: React.FC = () => {
             {loading && <div className="text-3xl animate-pulse text-white font-bold tracking-widest">{t.loading}</div>}
             
             {!loading && enemy && (
-                <div className={`relative flex flex-row items-center justify-center gap-8 w-full max-w-4xl p-4 transition-opacity duration-300 ${battleState === BattleState.VICTORY ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
+                <div className={`relative flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 w-full max-w-4xl p-4 transition-opacity duration-300 ${battleState === BattleState.VICTORY ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
                     {/* Monster visual */}
                     <div className="w-1/2 flex items-center justify-center animate-bounce-slight">
                         <img 
                             src={enemy.imageUrl} 
                             alt={enemy.name}
-                            className={`object-contain pixelated drop-shadow-[0_0_20px_rgba(255,0,0,0.4)] ${enemy.isBoss ? 'w-64 h-64 md:w-80 md:h-80 filter saturate-150' : 'w-48 h-48 md:w-64 md:h-64'}`}
+                            className={`object-contain pixelated drop-shadow-[0_0_20px_rgba(255,0,0,0.4)] ${enemy.isBoss ? 'w-48 h-48 md:w-80 md:h-80 filter saturate-150' : 'w-32 h-32 md:w-64 md:h-64'}`}
                             style={{ imageRendering: 'pixelated' }}
                         />
                     </div>
                     
                     {/* Stats Info (Detailed) */}
-                    <div className="w-1/2 bg-black/80 p-6 border-2 border-white text-left rounded-lg shadow-xl backdrop-blur-md">
-                        <div className={`text-2xl lg:text-3xl font-bold mb-2 tracking-widest flex items-center gap-2`}>
-                            <span className={`text-base align-middle mr-1 border border-current px-1 rounded ${getLevelColor(enemy.level, !!enemy.isBoss)}`}>Lv.{enemy.level}</span>
-                            <span className="text-red-400">{enemy.name}</span>
+                    <div className="w-full md:w-1/2 bg-black/80 p-2 md:p-6 border-2 border-white text-left rounded-lg shadow-xl backdrop-blur-md">
+                        <div className={`text-lg md:text-3xl font-bold mb-2 tracking-widest flex items-center gap-2`}>
+                            <span className={`text-xs md:text-base align-middle mr-1 border border-current px-1 rounded ${getLevelColor(enemy.level, !!enemy.isBoss)}`}>Lv.{enemy.level}</span>
+                            <span className="text-red-400 truncate">{enemy.name}</span>
                         </div>
-                        <div className="text-base lg:text-lg text-gray-300 italic mb-4 font-serif leading-snug">{enemy.description}</div>
+                        <div className="hidden md:block text-lg text-gray-300 italic mb-4 font-serif leading-snug">{enemy.description}</div>
                         
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-lg mb-4 font-mono">
-                            <div className="text-green-400">HP: {enemy.hp.toLocaleString()} / {enemy.maxHp.toLocaleString()}</div>
+                        <div className="grid grid-cols-2 gap-x-2 md:gap-x-4 gap-y-1 md:gap-y-2 text-sm md:text-lg mb-2 md:mb-4 font-mono">
+                            <div className="text-green-400">HP: {enemy.hp.toLocaleString()}</div>
                             <div className="text-blue-400">MP: {enemy.mp?.toLocaleString() || '??'}</div>
                             <div className="text-red-400">ATK: {enemy.attack.toLocaleString()}</div>
                             <div className="text-yellow-400">DEF: {enemy.defense?.toLocaleString() || '??'}</div>
                         </div>
 
-                        <div className="w-full bg-gray-800 h-6 rounded-full overflow-hidden border border-gray-600">
+                        <div className="w-full bg-gray-800 h-4 md:h-6 rounded-full overflow-hidden border border-gray-600">
                             <div 
                                 className="bg-gradient-to-r from-red-600 to-red-400 h-full transition-all duration-500 shadow-[0_0_10px_red]" 
                                 style={{ width: `${(enemy.hp / enemy.maxHp) * 100}%` }}
@@ -1502,13 +1525,13 @@ const App: React.FC = () => {
 
             {/* Victory/Defeat Overlay */}
             {(battleState === BattleState.VICTORY || battleState === BattleState.DEFEAT) && (
-                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center">
-                    <div className={`text-6xl md:text-8xl font-bold mb-6 animate-bounce drop-shadow-[0_0_20px_rgba(0,0,0,1)] ${battleState === BattleState.VICTORY ? 'text-yellow-400' : 'text-red-700 font-["Nosifer"]'}`}>
+                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
+                    <div className={`text-4xl md:text-8xl font-bold mb-6 animate-bounce drop-shadow-[0_0_20px_rgba(0,0,0,1)] ${battleState === BattleState.VICTORY ? 'text-yellow-400' : 'text-red-700 font-["Nosifer"]'}`}>
                         {battleState === BattleState.VICTORY ? 
                            (enemy?.isBoss ? (lang === Language.ZH ? '大獲全勝！' : 'GLORIOUS VICTORY!') : (lang === Language.ZH ? '勝利！' : 'VICTORY!')) 
                            : (lang === Language.ZH ? '全軍覆沒...' : 'DEFEAT...')}
                     </div>
-                    <div className="bg-blue-900/90 border-2 border-white px-8 py-4 text-xl md:text-2xl animate-pulse shadow-[0_0_30px_rgba(59,130,246,0.6)] rounded-lg">
+                    <div className="bg-blue-900/90 border-2 border-white px-8 py-4 text-xl md:text-2xl animate-pulse shadow-[0_0_30px_rgba(59,130,246,0.6)] rounded-lg pointer-events-auto cursor-pointer" onClick={() => handleInput('ENTER')}>
                         {lang === Language.ZH ? '點擊任意處繼續 ▶' : 'Click Anywhere to Continue ▶'}
                     </div>
                 </div>
@@ -1516,9 +1539,9 @@ const App: React.FC = () => {
           </div>
 
           {/* Bottom: Logs & Commands */}
-          <div className="flex-1 flex gap-2 min-h-[160px]">
+          <div className="flex-1 flex gap-2 min-h-[140px] md:min-h-[160px]">
              {/* Command Menu */}
-             <RetroWindow className="w-1/3 flex flex-col justify-center space-y-1">
+             <RetroWindow className="w-1/3 flex flex-col justify-center space-y-1 overflow-y-auto">
                 {['PHYSICAL', 'MAG_ATK', 'MAG_HEAL', 'ITEM', 'FLEE'].map((action, idx) => (
                     <RetroButton 
                         key={action}
@@ -1537,8 +1560,9 @@ const App: React.FC = () => {
                             }
                         }}
                         disabled={battleState !== BattleState.PLAYER_INPUT}
-                        className={`${battleState !== BattleState.PLAYER_INPUT ? 'opacity-50' : ''} text-lg py-1`}
+                        className={`${battleState !== BattleState.PLAYER_INPUT ? 'opacity-50' : ''} text-sm md:text-lg py-1 md:py-2`}
                     >
+                        {/* Removed red dot as requested */}
                         {action === 'PHYSICAL' ? t.cmdPhysical : 
                         action === 'MAG_ATK' ? t.cmdMagAtk : 
                         action === 'MAG_HEAL' ? t.cmdMagHeal : 
@@ -1549,7 +1573,7 @@ const App: React.FC = () => {
 
              {/* Message Log */}
              <RetroWindow className="flex-1 overflow-hidden flex flex-col bg-blue-900/90" title="ADVENTURE LOG">
-                <div className="flex-1 overflow-y-auto font-mono text-base leading-relaxed space-y-1 p-2" ref={scrollRef}>
+                <div className="flex-1 overflow-y-auto font-mono text-sm md:text-base leading-relaxed space-y-1 p-2" ref={scrollRef}>
                     {battleLogs.map((log, i) => (
                         <div key={i} className="animate-fade-in-up border-b border-blue-800/50 pb-1 last:border-0">
                             <span className="text-yellow-400 mr-2">➤</span>{log}
@@ -1568,17 +1592,17 @@ const App: React.FC = () => {
       
       {/* Floating Save Button (Top Right) */}
       {(gameState === GameState.MAP || gameState === GameState.TOWN || gameState === GameState.DUNGEON) && (
-          <div className="fixed top-6 right-24 z-[100] flex gap-2">
+          <div className="fixed top-2 right-16 md:top-6 md:right-24 z-[100] flex gap-2">
             <button 
               onClick={handleReturnToTitle}
-              className="bg-red-800 border-2 border-red-400 text-white px-4 py-2 rounded-full font-bold shadow-lg hover:bg-red-700 active:scale-95 flex items-center gap-2"
+              className="bg-red-800 border-2 border-red-400 text-white px-3 py-1 md:px-4 md:py-2 rounded-full font-bold shadow-lg hover:bg-red-700 active:scale-95 flex items-center gap-2 text-xs md:text-base"
               title={t.saveLoad.returnTitle}
             >
                 🏠 <span className="hidden md:inline">{t.saveLoad.returnTitle}</span>
             </button>
             <button 
               onClick={(e) => { e.stopPropagation(); setShowSaveMenu(true); audioService.playSfx('SELECT'); }}
-              className="bg-green-800 border-2 border-green-400 text-white px-4 py-2 rounded-full font-bold shadow-lg hover:bg-green-700 active:scale-95 flex items-center gap-2"
+              className="bg-green-800 border-2 border-green-400 text-white px-3 py-1 md:px-4 md:py-2 rounded-full font-bold shadow-lg hover:bg-green-700 active:scale-95 flex items-center gap-2 text-xs md:text-base"
               title={t.saveLoad.saveBtn}
             >
                 💾 <span className="hidden md:inline">{t.saveLoad.saveBtn}</span>
@@ -1589,13 +1613,13 @@ const App: React.FC = () => {
       {/* Sound Toggle */}
       <button 
         onClick={toggleMute}
-        className="fixed top-6 right-6 z-[100] bg-gray-800 border-2 border-white text-white w-14 h-14 rounded-full flex items-center justify-center hover:bg-gray-700 active:scale-95 shadow-[0_0_15px_rgba(255,255,255,0.3)] transition-transform"
+        className="fixed top-2 right-2 md:top-6 md:right-6 z-[100] bg-gray-800 border-2 border-white text-white w-10 h-10 md:w-14 md:h-14 rounded-full flex items-center justify-center hover:bg-gray-700 active:scale-95 shadow-[0_0_15px_rgba(255,255,255,0.3)] transition-transform"
         title={isMuted ? "Unmute" : "Mute"}
       >
         {isMuted ? (
-            <span className="text-3xl filter grayscale opacity-50">🔇</span>
+            <span className="text-xl md:text-3xl filter grayscale opacity-50">🔇</span>
         ) : (
-            <span className="text-3xl">🔊</span>
+            <span className="text-xl md:text-3xl">🔊</span>
         )}
       </button>
 
@@ -1611,8 +1635,8 @@ const App: React.FC = () => {
           </div>
       )}
       
-      {/* Main Game Container */}
-      <div className="w-full max-w-[1280px] max-h-[100dvh] aspect-video bg-gray-900 relative shadow-2xl flex flex-col border-0 md:border-[12px] border-gray-700 rounded-xl overflow-hidden box-border">
+      {/* Main Game Container - RWD Update */}
+      <div className="w-full max-w-[1280px] h-[100dvh] md:max-h-[90vh] md:aspect-video bg-gray-900 relative shadow-2xl flex flex-col border-0 md:border-[12px] border-gray-700 rounded-none md:rounded-xl overflow-hidden box-border">
         {/* Screen Content */}
         <div className="flex-1 p-0 md:p-6 bg-[#0a0a0a] relative flex flex-col">
             {gameState === GameState.TITLE && renderTitle()}
@@ -1654,10 +1678,10 @@ const StatusPanel = ({ player, t, onSave }: { player: Player, t: Translation, on
     const nextLevelExp = player.level * 50; 
 
     return (
-    <RetroWindow title={player.name} className="h-full bg-blue-900/80 flex flex-col">
-        <div className="space-y-3 text-2xl font-bold tracking-wide flex-1">
+    <RetroWindow title={player.name} className="h-full bg-blue-900/80 flex flex-col p-2 md:p-4">
+        <div className="space-y-1 md:space-y-3 text-sm md:text-2xl font-bold tracking-wide flex-1">
             {/* Improved Level Display Row */}
-            <div className="flex items-center gap-2 border-b border-blue-700 pb-1 text-lg">
+            <div className="flex items-center gap-2 border-b border-blue-700 pb-1 text-base md:text-lg">
                 <span className="text-yellow-400 whitespace-nowrap">{t.lvl} {player.level}</span>
                 <div className="flex-1 flex items-center gap-2">
                     <div className="flex-1 bg-gray-800 h-2 rounded-full overflow-hidden border border-gray-500 relative">
@@ -1666,49 +1690,52 @@ const StatusPanel = ({ player, t, onSave }: { player: Player, t: Translation, on
                             style={{ width: `${Math.min(100, (player.exp / nextLevelExp) * 100)}%` }}
                         ></div>
                     </div>
-                    <span className="text-xs text-gray-400">{player.exp}/{nextLevelExp}</span>
+                    <span className="text-[10px] md:text-xs text-gray-400">{player.exp}/{nextLevelExp}</span>
                 </div>
             </div>
             
             <div className="space-y-1">
-                <div className="flex justify-between text-base text-gray-300">
+                <div className="flex justify-between text-xs md:text-base text-gray-300">
                     <span>{t.hp}</span>
                     <span>{player.hp.toLocaleString()}/{player.maxHp.toLocaleString()}</span>
                 </div>
-                <div className="w-full bg-gray-800 h-3 rounded-full overflow-hidden border border-gray-500">
+                <div className="w-full bg-gray-800 h-2 md:h-3 rounded-full overflow-hidden border border-gray-500">
                     <div className="bg-gradient-to-r from-green-600 to-green-400 h-full" style={{ width: `${(player.hp / player.maxHp) * 100}%` }}></div>
                 </div>
             </div>
 
             <div className="space-y-1">
-                <div className="flex justify-between text-base text-gray-300">
+                <div className="flex justify-between text-xs md:text-base text-gray-300">
                     <span>{t.mp}</span>
                     <span>{player.mp.toLocaleString()}/{player.maxMp.toLocaleString()}</span>
                 </div>
-                <div className="w-full bg-gray-800 h-3 rounded-full overflow-hidden border border-gray-500">
+                <div className="w-full bg-gray-800 h-2 md:h-3 rounded-full overflow-hidden border border-gray-500">
                     <div className="bg-gradient-to-r from-blue-600 to-blue-400 h-full" style={{ width: `${(player.mp / player.maxMp) * 100}%` }}></div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-blue-700 text-lg">
+            <div className="grid grid-cols-2 gap-2 mt-1 md:mt-2 pt-1 md:pt-2 border-t border-blue-700 text-sm md:text-lg">
                 <div className="text-red-300">{t.atk}: {(Math.floor(player.level * 2) + player.equipmentAtk).toLocaleString()}</div>
                 <div className="text-blue-300">{t.def}: {(Math.floor(player.level / 2) + player.equipmentDef).toLocaleString()}</div>
             </div>
 
              {/* Inventory & Equips */}
-             <div className="mt-2 pt-2 border-t border-blue-700 space-y-1 text-base">
+             <div className="mt-1 md:mt-2 pt-1 md:pt-2 border-t border-blue-700 space-y-1 text-xs md:text-base hidden md:block">
                 <div className="flex justify-between text-orange-300">
                      <span>⚔️ {t.atk} +{player.equipmentAtk.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-gray-300">
                      <span>🛡️ {t.def} +{player.equipmentDef.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-purple-300">
-                     <span>{t.potions}: {player.potions.toLocaleString()}</span>
+                <div className="flex justify-between text-purple-300 items-center">
+                     <span className="flex items-center gap-1">
+                        <img src={POTION_ICON_URL} alt="Potion" className="w-4 h-4" /> 
+                        {t.potions} {player.potions.toLocaleString()}
+                     </span>
                 </div>
             </div>
 
-            <div className="mt-4 pt-2 border-t border-blue-700 text-lg text-yellow-200">
+            <div className="mt-1 md:mt-4 pt-1 md:pt-2 border-t border-blue-700 text-sm md:text-lg text-yellow-200">
                 💰 {player.gold.toLocaleString()} G
             </div>
         </div>
