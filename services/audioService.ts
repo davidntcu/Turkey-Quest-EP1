@@ -4,12 +4,9 @@
 
 class AudioService {
   private ctx: AudioContext | null = null;
-  private bgmOscillators: OscillatorNode[] = [];
-  private bgmGain: GainNode | null = null;
   private isMuted: boolean = false;
   private currentBgm: 'TITLE' | 'MAP' | 'BATTLE' | null = null;
   private intervalId: number | null = null;
-  private initialized: boolean = false;
 
   // Browser policy requires user interaction before audio context runs
   async init() {
@@ -19,7 +16,6 @@ class AudioService {
     if (this.ctx.state === 'suspended') {
       await this.ctx.resume();
     }
-    this.initialized = true;
   }
 
   // --- Sound Effects (SFX) ---

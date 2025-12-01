@@ -1,5 +1,4 @@
 
-
 export enum Language {
   EN = 'EN',
   ZH = 'ZH'
@@ -7,7 +6,7 @@ export enum Language {
 
 export enum GameState {
   TITLE = 'TITLE',
-  NAME_INPUT = 'NAME_INPUT', // New State
+  NAME_INPUT = 'NAME_INPUT', 
   MAP = 'MAP',
   TOWN = 'TOWN',
   DUNGEON = 'DUNGEON',
@@ -27,9 +26,9 @@ export type ShopType = 'GUILD' | 'WEAPON' | 'ARMOR' | 'ITEM' | 'MAGIC' | null;
 export type SceneType = 'AVONLEA' | 'CAVENDISH' | 'CHARLOTTETOWN';
 
 export interface DungeonProgress {
-  b1Cleared: boolean;
-  b2Cleared: boolean;
-  scene2Unlocked: boolean;
+  avonlea: { b1: boolean; b2: boolean };
+  cavendish: { b1: boolean; b2: boolean };
+  charlottetown: { b1: boolean; b2: boolean };
 }
 
 export interface Player {
@@ -44,6 +43,7 @@ export interface Player {
   potions: number;
   equipmentAtk: number;
   equipmentDef: number;
+  reincarnationCount: number;
 }
 
 export interface Enemy {
@@ -66,9 +66,24 @@ export interface SaveData {
   playerPos: { x: number; y: number };
   townPlayerPos: { x: number; y: number };
   dungeonFloor: number;
+  dungeonPlayerPos?: { x: number; y: number };
   dungeonProgress: DungeonProgress;
   timestamp: number;
   locationLabel: string;
+}
+
+export interface TownNPC {
+  id: number;
+  x: number;
+  y: number;
+  avatarSeed: string;
+  name: string;
+  dialogue: string;
+  reward?: {
+      type: 'GOLD' | 'POTION' | 'MAXHP' | 'MAXMP';
+      value: number;
+  };
+  rewardClaimed: boolean;
 }
 
 export interface Translation {
@@ -84,7 +99,15 @@ export interface Translation {
   atk: string;
   def: string;
   potions: string;
-  // Naming Screen
+  reincarnationLabel: string;
+  about: {
+    title: string;
+    plot: string;
+    gameplay: string;
+    author: string;
+    email: string;
+    close: string;
+  };
   naming: {
     title: string;
     placeholder: string;
@@ -92,7 +115,6 @@ export interface Translation {
     confirm: string;
     defaultName: string;
   };
-  // Save/Load
   saveLoad: {
     saveTitle: string;
     loadTitle: string;
@@ -106,13 +128,11 @@ export interface Translation {
     returnTitle: string;
     returningMsg: string;
   };
-  // Battle Commands
   cmdPhysical: string;
   cmdMagAtk: string;
   cmdMagHeal: string;
   cmdItem: string;
   cmdFlee: string;
-  
   enemyAppears: (name: string) => string;
   playerAttack: (damage: number) => string;
   playerMagAtk: (damage: number) => string;
@@ -127,7 +147,7 @@ export interface Translation {
   runSuccess: string;
   runFail: string;
   heal: (amount: number) => string;
-  itemUsed: (name: string) => string;
+  itemUsed: () => string;
   noItem: string;
   noMp: string;
   locations: {
@@ -136,12 +156,10 @@ export interface Translation {
     volcano: string;
     castle: string;
   };
-  // Map Interactions
   mapActions: {
     enterTown: string;
     enterDungeon: string;
   };
-  // Town & Shops
   town: {
     welcome: string;
     enterShop: string;
@@ -165,7 +183,6 @@ export interface Translation {
     restored: string;
     bought: string;
   };
-  // Dungeon Actions
   dungeon: {
     title: string;
     floor: (f: number) => string;
@@ -180,13 +197,30 @@ export interface Translation {
     bossEncounter: string;
     floorCleared: string;
     sceneUnlocked: string;
+    reincarnationMsg: (count: number) => string;
+  };
+  reincarnationModal: {
+    title: string;
+    message: (nextRank: number) => string;
+    bonus: string;
+    confirm: string;
   };
   scenes: {
     avonlea: string;
     charlottetown: string;
+    cavendish: string;
     travelTo: (place: string) => string;
-  }
+    locked: string;
+  };
+  facilityHints: {
+    house: string;
+    school: string;
+    academy: string;
+  };
 }
 
 export type TileType = 'W' | 'G' | 'F' | 'M' | 'V' | 'C' | 'H' | 'K' | 'U';
-export type TownTileType = '_' | 'S' | 'G' | 'W' | 'A' | 'I' | 'M' | 'E';
+// R: Road, T: Tree, N: House, g: Guild, w: Weapon, a: Armor, i: Item, m: Magic, E: Exit
+export type TownTileType = '_' | 'R' | 'T' | 'N' | 'g' | 'w' | 'a' | 'i' | 'm' | 'E';
+// f: Floor, d: Wall (Dark), S: Stairs(Up/Down), E: Exit/Teleport, B: Boss
+export type DungeonTileType = '_' | 'f' | 'd' | 'S' | 'E' | 'B';

@@ -1,36 +1,116 @@
 
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RetroWindow, RetroButton, TitleBadge } from './components/RetroUI';
 import { VirtualPad } from './components/VirtualPad';
 import { generateDinosaur } from './services/geminiService';
 import { audioService } from './services/audioService';
-import { Language, GameState, Player, Enemy, BattleState, Translation, ShopType, SceneType, DungeonProgress, TileType, SaveData, TownNPC } from './types';
+import { Language, GameState, Player, Enemy, BattleState, Translation, ShopType, SceneType, DungeonProgress, TileType, SaveData, TownNPC, DungeonTileType, TownTileType } from './types';
 import { 
   TRANSLATIONS, 
   INITIAL_PLAYER, 
   GOD_MODE_PLAYER,
   LOCATION_IMAGES, 
-  SHOP_IMAGES,
+  SHOP_IMAGES, 
   LOOT_NAMES,
   MAP_AVONLEA,
   MAP_CAVENDISH,
   MAP_CHARLOTTETOWN,
   TOWN_MAP,
+  DUNGEON_B1_MAP,
+  DUNGEON_B2_MAP,
   MAP_START_POS,
   TOWN_START_POS,
+  DUNGEON_START_POS,
   TILE_COLORS,
   TILE_ICONS,
   ENCOUNTER_RATES,
   PLAYER_SPRITE_URL,
   POTION_ICON_URL,
-  TITLE_BADGE_URL,
   GAME_VERSION,
-  ANNE_TRIVIA,
+  NPC_DIALOGUES,
   NPC_NAMES
 } from './constants';
 
-const App: React.FC = () => {
+// Sub-component for cleanliness
+const StatusPanel = ({ player, t }: { player: Player, t: Translation }) => {
+    // Current Level Max Exp Calculation (approx)
+    const nextLevelExp = player.level * 50; 
+
+    // Add Reincarnation count to title strictly
+    const displayTitle = `${player.name} ★${player.reincarnationCount}`;
+
+    // Stats calculation (Base + Growth + Equip)
+    // Base Atk: 13, Base Def: 5
+    const totalAtk = 13 + Math.floor(player.level * 2) + player.equipmentAtk;
+    const totalDef = 5 + Math.floor(player.level / 2) + player.equipmentDef;
+
+    return (
+    <RetroWindow title={displayTitle} className="h-full bg-blue-900/80 flex flex-col p-2 md:p-4">
+        <div className="space-y-1 md:space-y-3 text-sm md:text-2xl font-bold tracking-wide flex-1">
+            {/* Improved Level Display Row */}
+            <div className="flex items-center gap-2 border-b border-blue-700 pb-1 text-base md:text-lg">
+                <span className="text-yellow-400 whitespace-nowrap">{t.lvl} {player.level}</span>
+                <div className="flex-1 flex items-center gap-2">
+                    <div className="flex-1 bg-gray-800 h-2 rounded-full overflow-hidden border border-gray-500 relative">
+                        <div 
+                            className="bg-purple-500 h-full" 
+                            style={{ width: `${Math.min(100, (player.exp / nextLevelExp) * 100)}%` }}
+                        ></div>
+                    </div>
+                    <span className="text-[10px] md:text-xs text-gray-400">{player.exp}/{nextLevelExp}</span>
+                </div>
+            </div>
+            
+            <div className="space-y-1">
+                <div className="flex justify-between text-xs md:text-base text-gray-300">
+                    <span>{t.hp}</span>
+                    <span>{player.hp.toLocaleString()}/{player.maxHp.toLocaleString()}</span>
+                </div>
+                <div className="w-full bg-gray-800 h-2 md:h-3 rounded-full overflow-hidden border border-gray-500">
+                    <div className="bg-gradient-to-r from-green-600 to-green-400 h-full" style={{ width: `${(player.hp / player.maxHp) * 100}%` }}></div>
+                </div>
+            </div>
+
+            <div className="space-y-1">
+                <div className="flex justify-between text-xs md:text-base text-gray-300">
+                    <span>{t.mp}</span>
+                    <span>{player.mp.toLocaleString()}/{player.maxMp.toLocaleString()}</span>
+                </div>
+                <div className="w-full bg-gray-800 h-2 md:h-3 rounded-full overflow-hidden border border-gray-500">
+                    <div className="bg-gradient-to-r from-blue-600 to-blue-400 h-full" style={{ width: `${(player.mp / player.maxMp) * 100}%` }}></div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mt-1 md:mt-2 pt-1 md:pt-2 border-t border-blue-700 text-sm md:text-lg">
+                <div className="text-red-300">{t.atk}: {totalAtk.toLocaleString()}</div>
+                <div className="text-blue-300">{t.def}: {totalDef.toLocaleString()}</div>
+            </div>
+
+             {/* Inventory & Equips - Improved Vertical Alignment with Grid */}
+             <div className="mt-1 md:mt-2 pt-1 md:pt-2 border-t border-blue-700 space-y-1 text-xs md:text-base hidden md:block">
+                <div className="grid grid-cols-[24px_1fr] gap-2 text-orange-300 items-center">
+                     <span className="flex justify-center">⚔️</span>
+                     <span>{t.atk} +{player.equipmentAtk.toLocaleString()}</span>
+                </div>
+                <div className="grid grid-cols-[24px_1fr] gap-2 text-gray-300 items-center">
+                     <span className="flex justify-center">🛡️</span>
+                     <span>{t.def} +{player.equipmentDef.toLocaleString()}</span>
+                </div>
+                <div className="grid grid-cols-[24px_1fr] gap-2 text-purple-300 items-center">
+                     <span className="flex justify-center"><img src={POTION_ICON_URL} alt="Potion" className="w-4 h-4 object-contain" /></span>
+                     <span>{t.potions} {player.potions.toLocaleString()}</span>
+                </div>
+            </div>
+
+            <div className="mt-1 md:mt-4 pt-1 md:pt-2 border-t border-blue-700 text-sm md:text-lg text-yellow-200">
+                💰 {player.gold.toLocaleString()} G
+            </div>
+        </div>
+    </RetroWindow>
+    );
+};
+
+const App = () => {
   // --- State ---
   const [lang, setLang] = useState<Language>(Language.ZH);
   const [gameState, setGameState] = useState<GameState>(GameState.TITLE);
@@ -40,6 +120,7 @@ const App: React.FC = () => {
   const [battleLogs, setBattleLogs] = useState<string[]>([]);
   const [battleState, setBattleState] = useState<BattleState>(BattleState.PLAYER_INPUT);
   const [menuIndex, setMenuIndex] = useState(0);
+  const [titleSelection, setTitleSelection] = useState(0); // 0: Start, 1: Continue
   const [loading, setLoading] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   
@@ -73,6 +154,7 @@ const App: React.FC = () => {
 
   // Dungeon State
   const [dungeonFloor, setDungeonFloor] = useState<number>(1);
+  const [dungeonPlayerPos, setDungeonPlayerPos] = useState({ x: DUNGEON_START_POS.x, y: DUNGEON_START_POS.y });
   const [dungeonProgress, setDungeonProgress] = useState<DungeonProgress>({ 
       avonlea: { b1: false, b2: false },
       cavendish: { b1: false, b2: false },
@@ -97,25 +179,23 @@ const App: React.FC = () => {
     return MAP_AVONLEA;
   };
 
+  const getDungeonMap = () => {
+      return dungeonFloor === 1 ? DUNGEON_B1_MAP : DUNGEON_B2_MAP;
+  }
+
   // Initialize Audio on first interaction
   const handleUserInteraction = () => {
-    // FIX: Only trigger if actually in Battle scene to prevent stale state bugs
     if (gameState === GameState.BATTLE && (battleState === BattleState.VICTORY || battleState === BattleState.DEFEAT)) {
         handleInput('ENTER');
     }
-    
-    // Attempt init audio context (may fail if already running or strict policy)
     audioService.init().catch(console.error);
   };
 
   const toggleMute = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent triggering other click handlers
-    // FIX: Just init audio directly, don't call handleUserInteraction to avoid side effects
+    e.stopPropagation();
     audioService.init().catch(console.error);
-    
     const muted = audioService.toggleMute();
     setIsMuted(muted);
-    // Play sound only if not muted
     if (!muted) audioService.playSfx('SELECT');
   };
 
@@ -135,14 +215,12 @@ const App: React.FC = () => {
     checkSaves();
   }, []);
 
-  // Auto-scroll logs
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [battleLogs]);
 
-  // BGM Manager
   useEffect(() => {
     if (gameState === GameState.TITLE || gameState === GameState.NAME_INPUT) {
         audioService.playBgm('TITLE');
@@ -159,27 +237,37 @@ const App: React.FC = () => {
   const initTownNPCs = useCallback(() => {
     const newNPCs: TownNPC[] = [];
     const seedBase = Date.now();
-    for (let i = 0; i < 3; i++) {
-       // Find valid road spot
+    const npcCount = 5; 
+    const rewardIndex = Math.floor(Math.random() * npcCount); 
+
+    for (let i = 0; i < npcCount; i++) {
        let rx = 0, ry = 0;
        do {
            rx = Math.floor(Math.random() * TOWN_MAP[0].length);
            ry = Math.floor(Math.random() * TOWN_MAP.length);
        } while (TOWN_MAP[ry][rx] !== 'R');
 
-       // Pick random message index
-       const triviaCount = ANNE_TRIVIA[currentScene].length;
-       const msgIdx = Math.floor(Math.random() * triviaCount);
-       const dialogue = ANNE_TRIVIA[currentScene][msgIdx];
+       const dialogueList = NPC_DIALOGUES;
+       const dialogue = dialogueList[Math.floor(Math.random() * dialogueList.length)];
        const name = NPC_NAMES[Math.floor(Math.random() * NPC_NAMES.length)];
+
+       let reward = undefined;
+       if (i === rewardIndex) {
+           const roll = Math.random();
+           if (roll < 0.4) reward = { type: 'GOLD', value: Math.floor(Math.random() * 50) + 50 }; 
+           else if (roll < 0.7) reward = { type: 'POTION', value: 1 }; 
+           else if (roll < 0.85) reward = { type: 'MAXHP', value: 1 };
+           else reward = { type: 'MAXMP', value: 1 }; 
+       }
 
        newNPCs.push({
            id: i,
            x: rx,
            y: ry,
            avatarSeed: `NPC_${seedBase}_${i}`,
-           name: name,
-           dialogue: dialogue,
+           name,
+           dialogue,
+           reward: reward as any,
            rewardClaimed: false
        });
     }
@@ -192,14 +280,13 @@ const App: React.FC = () => {
 
       const interval = setInterval(() => {
           setTownNPCs(prev => prev.map(npc => {
-              if (Math.random() > 0.6) return npc; // Stay still sometimes
+              if (Math.random() > 0.6) return npc; 
 
               const dirs = [[0,1], [0,-1], [1,0], [-1,0]];
               const move = dirs[Math.floor(Math.random() * dirs.length)];
               const nx = npc.x + move[0];
               const ny = npc.y + move[1];
 
-              // Check bounds and if tile is Road
               if (ny >= 0 && ny < TOWN_MAP.length && nx >= 0 && nx < TOWN_MAP[0].length) {
                   if (TOWN_MAP[ny][nx] === 'R') {
                       return { ...npc, x: nx, y: ny };
@@ -216,7 +303,7 @@ const App: React.FC = () => {
   // Passive Effects Timer
   useEffect(() => {
     if (gameState !== GameState.MAP) {
-        academyTimer.current = 0; // Reset timer if leaving map
+        academyTimer.current = 0; 
         return;
     }
 
@@ -225,7 +312,6 @@ const App: React.FC = () => {
         const tile = mapData[playerPos.y][playerPos.x];
         let effected = false;
 
-        // Green Gables Effect (HP/MP Regen)
         if (tile === 'H' && (player.hp < player.maxHp || player.mp < player.maxMp)) {
              setPlayer(p => ({
                  ...p,
@@ -235,30 +321,22 @@ const App: React.FC = () => {
              effected = true;
         }
 
-        // School Effect (Gold)
         if (tile === 'K') {
             setPlayer(p => ({ ...p, gold: p.gold + 10 }));
             effected = true;
         }
 
-        // Academy Effect (Potions per 5s)
         if (tile === 'U') {
             academyTimer.current += 1;
             if (academyTimer.current >= 5) {
                 setPlayer(p => ({ ...p, potions: p.potions + 1 }));
                 academyTimer.current = 0;
                 effected = true;
-                // Optional: Play a small sound or show visual
             }
         } else {
-            // Reset timer if moved away from Academy
             academyTimer.current = 0;
         }
         
-        if (effected) {
-             // Optional: visual feedback handled by UI update
-        }
-
     }, 1000);
 
     return () => clearInterval(interval);
@@ -267,7 +345,6 @@ const App: React.FC = () => {
   // --- Naming Logic ---
   
   const getVisualLength = (str: string) => {
-      // RegEx to count non-ASCII (Double byte) as 2, others as 1
       let len = 0;
       for (let i = 0; i < str.length; i++) {
           if (str.charCodeAt(i) > 255) len += 2;
@@ -289,6 +366,7 @@ const App: React.FC = () => {
       setPlayer({ ...INITIAL_PLAYER, name: finalName });
       setGameState(GameState.MAP);
       setCurrentScene('AVONLEA');
+      setPlayerPos(MAP_START_POS); // Reset Position to Start
       setDungeonFloor(1);
       setDungeonProgress({ 
           avonlea: { b1: false, b2: false },
@@ -301,8 +379,7 @@ const App: React.FC = () => {
   // --- Save/Load Logic ---
 
   const getSaveSlots = (): (SaveData | null)[] => {
-      const slots = [];
-      // 5 Slots now (0-3 Manual, 4 Auto)
+      const slots: (SaveData | null)[] = [];
       for(let i=1; i<=5; i++) {
           const data = localStorage.getItem(`turkey_quest_save_${i}`);
           slots.push(data ? JSON.parse(data) : null);
@@ -321,6 +398,7 @@ const App: React.FC = () => {
           playerPos,
           townPlayerPos,
           dungeonFloor,
+          dungeonPlayerPos,
           dungeonProgress,
           timestamp: Date.now(),
           locationLabel
@@ -329,11 +407,10 @@ const App: React.FC = () => {
 
   const performSave = (slotIndex: number, data: SaveData) => {
       localStorage.setItem(`turkey_quest_save_${slotIndex + 1}`, JSON.stringify(data));
-      setHasSaves(true); // Update hasSaves state immediately
+      setHasSaves(true);
   };
 
   const saveGame = (slotIndex: number) => {
-      // Manual Save (0-3)
       performSave(slotIndex, createSaveData());
       audioService.playSfx('WIN');
       setSaveMessage(t.saveLoad.savedMsg);
@@ -344,7 +421,6 @@ const App: React.FC = () => {
   };
 
   const autoSaveGame = (currentPlayerState: Player) => {
-      // Auto Save to Slot 5 (Index 4)
       const data = createSaveData(currentPlayerState);
       performSave(4, data);
       addLog(t.saveLoad.autoSavedLog);
@@ -360,9 +436,8 @@ const App: React.FC = () => {
       setPlayerPos(data.playerPos);
       setTownPlayerPos(data.townPlayerPos);
       setDungeonFloor(data.dungeonFloor);
-      // Migration for old saves if structure changed (Basic check)
+      setDungeonPlayerPos(data.dungeonPlayerPos || DUNGEON_START_POS);
       if (!data.dungeonProgress.avonlea) {
-          // Reset progress if structure is old
           setDungeonProgress({ 
               avonlea: { b1: false, b2: false },
               cavendish: { b1: false, b2: false },
@@ -372,9 +447,8 @@ const App: React.FC = () => {
           setDungeonProgress(data.dungeonProgress);
       }
       
-      // Determine GameState based on context
       if (data.dungeonFloor > 0 && data.locationLabel.includes('B')) {
-          setGameState(GameState.DUNGEON); // Rough heuristic
+          setGameState(GameState.DUNGEON); 
       } else if (data.locationLabel.includes('Town') || data.locationLabel.includes('堡壘')) {
           setGameState(GameState.TOWN);
       } else {
@@ -389,23 +463,19 @@ const App: React.FC = () => {
   const handleReturnToTitle = (e: React.MouseEvent) => {
       e.stopPropagation();
       audioService.playSfx('SELECT');
-      // Auto Save first
       autoSaveGame(player);
-      
-      // Show Notification
       setNotification(t.saveLoad.returningMsg);
-      
       setTimeout(() => {
           setNotification("");
           setGameState(GameState.TITLE);
-          checkSaves(); // Re-check saves when returning to title
+          checkSaves();
       }, 1500);
   };
 
   // --- Logic ---
 
   const addLog = (msg: string) => {
-    setBattleLogs(prev => [...prev.slice(-4), msg]); // Keep last 5 messages
+    setBattleLogs(prev => [...prev.slice(-4), msg]);
   };
 
   const getDist = (p1: {x: number, y: number}, p2: {x: number, y: number}) => {
@@ -422,51 +492,42 @@ const App: React.FC = () => {
   };
 
   const calculateEncounterLevel = (isBoss: boolean, mapData: TileType[][], currentPos: {x:number, y:number}) => {
-    // Determine Level Range based on Scene & Location
     let sceneMin = 1;
     let sceneMax = 8;
-    
-    // Level Scaling Logic:
-    // Scene 1 (Avonlea): Base
-    // Scene 2 (Cavendish): +5
-    // Scene 3 (Charlottetown): +10
     
     let additive = 0;
     if (currentScene === 'CAVENDISH') additive = 5;
     if (currentScene === 'CHARLOTTETOWN') additive = 10;
 
-    // Apply additive to ranges
     sceneMin += additive;
     sceneMax += additive;
 
     if (gameState === GameState.DUNGEON) {
-        if (dungeonFloor === 1) { return Math.floor(Math.random() * ((9 + additive) - (5 + additive) + 1)) + (5 + additive); } // 5-9 + add
-        if (dungeonFloor === 2) { return Math.floor(Math.random() * ((10 + additive) - (8 + additive) + 1)) + (8 + additive); } // 8-10 + add
-        if (isBoss) return (dungeonFloor === 1 ? 12 : 15) + additive;
+        if (dungeonFloor === 1) { return Math.floor(Math.random() * ((9 + additive) - (5 + additive) + 1)) + (5 + additive); } 
+        if (dungeonFloor === 2) { return Math.floor(Math.random() * ((10 + additive) - (8 + additive) + 1)) + (8 + additive); } 
+        
+        if (isBoss) {
+            const baseBossLvl = dungeonFloor === 1 ? 10 : 15;
+            return baseBossLvl + additive;
+        }
     } 
 
-    // Zone Scaling Logic (Director's Request)
     const totalRange = sceneMax - sceneMin;
     const oneThird = totalRange / 3;
     
-    // Ranges
     const lowEndMax = Math.floor(sceneMin + oneThird);
     const highEndMin = Math.ceil(sceneMin + (oneThird * 2));
 
-    // Zone 1: Safe Zone (Near Town C) radius 5 OR Green Gables H radius 3
     const townLoc = findTileLocation(mapData, 'C');
     if (townLoc && getDist(currentPos, townLoc) <= 5) {
         return Math.floor(Math.random() * (lowEndMax - sceneMin + 1)) + sceneMin;
     }
 
-    // Zone 2: Danger Zone (Near Dungeon V) radius 3
     const dungeonLocV = findTileLocation(mapData, 'V');
-    
     if (dungeonLocV && getDist(currentPos, dungeonLocV) <= 3) {
          return Math.floor(Math.random() * (sceneMax - highEndMin + 1)) + highEndMin;
     }
 
-    // Zone 3: Middle Zone (Everything else)
     const midMin = lowEndMax + 1;
     const midMax = highEndMin - 1;
     
@@ -475,14 +536,12 @@ const App: React.FC = () => {
   };
 
   const startBattle = async (isBoss = false) => {
-    // FIX: Clear existing enemy to prevent "double image" / ghosting
     setEnemy(null);
     
-    audioService.playSfx(isBoss ? 'LOSE' : 'CONFIRM'); // Intimidating sound for boss
+    audioService.playSfx(isBoss ? 'LOSE' : 'CONFIRM'); 
     setLoading(true);
-    // Determine Map Background based on Tile
     const mapData = getCurrentMapData();
-    let currentTile: TileType = 'G'; // Default grass
+    let currentTile: TileType = 'G'; 
     
     if (gameState === GameState.MAP) {
          currentTile = mapData[playerPos.y][playerPos.x];
@@ -494,18 +553,16 @@ const App: React.FC = () => {
     setBattleLogs([]);
     setMenuIndex(0);
 
-    // Set Background based on location/tile
     if (gameState === GameState.DUNGEON) setSelectedLocation('volcano');
     else if (currentTile === 'F') setSelectedLocation('forest');
     else if (currentTile === 'M') setSelectedLocation('mountain');
     else if (currentTile === 'C') setSelectedLocation('castle');
-    else setSelectedLocation('castle'); // Default fallback for plains/grass
+    else setSelectedLocation('castle');
 
     const targetLevel = calculateEncounterLevel(isBoss, mapData, playerPos);
 
     const newEnemy = await generateDinosaur(targetLevel, lang);
     
-    // Flag boss
     if (isBoss) {
         newEnemy.isBoss = true;
         newEnemy.name = `BOSS: ${newEnemy.name}`;
@@ -518,85 +575,18 @@ const App: React.FC = () => {
     setLoading(false);
   };
 
-  // Check random encounter on map move
-  const checkRandomEncounter = (tile: TileType) => {
-    // FIX: Never encounter on Special Tiles (C, V, H, K, U)
-    if (tile === 'C' || tile === 'V' || tile === 'H' || tile === 'K' || tile === 'U') return false; 
+  const checkRandomEncounter = (tile: TileType | DungeonTileType) => {
+    if (['C', 'V', 'H', 'K', 'U', 'W', '_', 'S', 'E', 'B', 'g', 'w', 'a', 'i', 'm', 'N', 'd'].includes(tile)) return false; 
 
-    const rate = ENCOUNTER_RATES[tile];
+    let rate = ENCOUNTER_RATES[tile as TileType | DungeonTileType] || 0.1;
+    if (gameState === GameState.DUNGEON) rate = 0.35;
+
     if (Math.random() < rate) {
        setMapMessage(t.dungeon.encounter);
-       // Small delay to show message then start battle
        setTimeout(() => startBattle(false), 100);
        return true;
     }
     return false;
-  };
-
-  // Dungeon Logic
-  const processExploration = (action: 'FORWARD' | 'SEARCH' | 'DEEPER' | 'SURFACE') => {
-    // Prevents accidental double triggers
-    if (inputCooldown) return;
-
-    audioService.playSfx('SELECT');
-
-    if (action === 'DEEPER') {
-        setDungeonFloor(2);
-        setExploreLog(t.dungeon.floor(2));
-        return;
-    }
-    if (action === 'SURFACE') {
-        setGameState(GameState.MAP);
-        
-        // Progress unlock logic
-        let unlocked = false;
-        if (currentScene === 'AVONLEA' && dungeonProgress.avonlea.b2 && !dungeonProgress.cavendish.b1) {
-             // Just purely informational, actual unlock is handled in renderMap
-             unlocked = true;
-        } else if (currentScene === 'CAVENDISH' && dungeonProgress.cavendish.b2 && !dungeonProgress.charlottetown.b1) {
-             unlocked = true;
-        }
-
-        if (unlocked) {
-            setMapMessage(t.dungeon.sceneUnlocked);
-            audioService.playSfx('WIN');
-        }
-        return;
-    }
-
-    // High encounter rate in Dungeon
-    const encounterChance = action === 'FORWARD' ? 0.7 : 0.4;
-    const roll = Math.random();
-    
-    if (roll < encounterChance) {
-        // Randomly determine if it's a boss encounter if not cleared yet
-        let isBoss = false;
-        
-        // Check boss spawn based on current scene progress
-        let cleared = false;
-        if (currentScene === 'AVONLEA') {
-            cleared = dungeonFloor === 1 ? dungeonProgress.avonlea.b1 : dungeonProgress.avonlea.b2;
-        } else if (currentScene === 'CAVENDISH') {
-            cleared = dungeonFloor === 1 ? dungeonProgress.cavendish.b1 : dungeonProgress.cavendish.b2;
-        } else if (currentScene === 'CHARLOTTETOWN') {
-            cleared = dungeonFloor === 1 ? dungeonProgress.charlottetown.b1 : dungeonProgress.charlottetown.b2;
-        }
-
-        if (!cleared && Math.random() < 0.2) isBoss = true; // 20% chance for boss
-
-        // Encounter
-        setExploreLog(isBoss ? t.dungeon.bossEncounter : t.dungeon.encounter);
-        setTimeout(() => startBattle(isBoss), 100);
-    } else if (roll > 0.8 && action === 'SEARCH') {
-        // Find Gold
-        const amount = Math.floor(Math.random() * 50 * dungeonFloor) + 50;
-        setPlayer(prev => ({...prev, gold: prev.gold + amount}));
-        setExploreLog(t.dungeon.foundGold(amount));
-        audioService.playSfx('CONFIRM');
-    } else {
-        // Nothing
-        setExploreLog(t.dungeon.nothing);
-    }
   };
 
   const handlePlayerAction = async (action: 'PHYSICAL' | 'MAG_ATK' | 'MAG_HEAL' | 'ITEM' | 'FLEE') => {
@@ -605,18 +595,14 @@ const App: React.FC = () => {
     setBattleState(BattleState.PROCESSING);
     audioService.playSfx('SELECT');
     
-    // 1. Player Turn
     let playerDamage = 0;
 
     switch (action) {
       case 'PHYSICAL':
-        // Base damage + Equipment Bonus
-        playerDamage = Math.max(1, Math.floor(Math.random() * 5) + player.level * 2 + player.equipmentAtk - enemy.defense);
-        // Critical hit chance
+        playerDamage = Math.max(1, Math.floor(Math.random() * 5) + (13 + player.level * 2 + player.equipmentAtk) - enemy.defense);
         if (Math.random() > 0.9) playerDamage = Math.floor(playerDamage * 1.5);
         
         audioService.playSfx('ATTACK');
-        // Small delay for impact sound
         setTimeout(() => audioService.playSfx('HIT'), 200);
 
         setEnemy(prev => prev ? { ...prev, hp: Math.max(0, prev.hp - playerDamage) } : null);
@@ -625,9 +611,8 @@ const App: React.FC = () => {
 
       case 'MAG_ATK':
         if (player.mp >= 5) {
-            // Magic Attack: Higher base, ignores defense mostly
             playerDamage = Math.floor(Math.random() * 10) + player.level * 4 + 10;
-            audioService.playSfx('CONFIRM'); // Magic sound
+            audioService.playSfx('CONFIRM'); 
             setTimeout(() => audioService.playSfx('HIT'), 300);
 
             setPlayer(prev => ({ ...prev, mp: prev.mp - 5 }));
@@ -654,13 +639,12 @@ const App: React.FC = () => {
         } else {
           audioService.playSfx('CANCEL');
           addLog(t.noMp);
-          setBattleState(BattleState.PLAYER_INPUT); // Cancel turn
+          setBattleState(BattleState.PLAYER_INPUT); 
           return;
         }
         break;
         
       case 'ITEM':
-         // Simplified: Potion only
          if (player.potions > 0) {
             audioService.playSfx('HEAL');
             setPlayer(prev => ({ 
@@ -680,14 +664,12 @@ const App: React.FC = () => {
       case 'FLEE':
         if (enemy.isBoss) {
             audioService.playSfx('CANCEL');
-            addLog(t.runFail); // Cannot run from boss
+            addLog(t.runFail); 
         } else if (Math.random() > 0.4) {
           audioService.playSfx('CONFIRM');
           addLog(t.runSuccess);
           await new Promise(r => setTimeout(r, 1000));
-          // Return to where we came from
           setGameState(prevGameState);
-          // Set cooldown to prevent accidental clicks
           setInputCooldown(true);
           setTimeout(() => setInputCooldown(false), 500);
           return;
@@ -698,70 +680,60 @@ const App: React.FC = () => {
         break;
     }
 
-    // Check Enemy Death
     if (enemy.hp - playerDamage <= 0 && (action === 'PHYSICAL' || action === 'MAG_ATK')) {
       const expGain = enemy.maxHp * 2;
       const goldGain = enemy.attack * 5;
       
-      // Calculate Loot Drops
       const lootRoll = Math.random();
       let lootMsg = "";
       
-      // Calculate new state first for Auto-Save
       let newPlayer = { ...player };
-      // Apply costs if magic used in the killing blow
       if (action === 'MAG_ATK') newPlayer.mp -= 5; 
 
-      // --- Multi-Level Up Logic (Director's Request) ---
       newPlayer.exp += expGain;
       newPlayer.gold += goldGain;
       
       let leveledUp = false;
       let nextLevelCost = newPlayer.level * 50;
 
-      // Loop to handle multiple level ups if EXP is huge
       while (newPlayer.exp >= nextLevelCost) {
-          newPlayer.exp -= nextLevelCost; // Subtract cost
+          newPlayer.exp -= nextLevelCost; 
           newPlayer.level += 1;
           newPlayer.maxHp += 10;
           newPlayer.maxMp += 5;
-          newPlayer.hp = newPlayer.maxHp; // Heal on level up
+          newPlayer.hp = newPlayer.maxHp; 
           newPlayer.mp = newPlayer.maxMp;
           
-          nextLevelCost = newPlayer.level * 50; // Update cost for next iteration
+          nextLevelCost = newPlayer.level * 50;
           leveledUp = true;
       }
 
-      // Loot Logic
-      if (lootRoll > 0.90) { // 10% Chance for Grimoire
+      if (lootRoll > 0.90) { 
          const grimoires = LOOT_NAMES[lang].grimoires;
          const gName = grimoires[Math.floor(Math.random() * grimoires.length)];
          const boost = 5;
          newPlayer.maxMp += boost;
          newPlayer.mp = newPlayer.maxMp;
          lootMsg = `${t.loot.found(gName)} ${t.loot.learn("Max MP", boost)}`;
-      } else if (lootRoll > 0.75) { // 15% Chance for Equipment
+      } else if (lootRoll > 0.75) { 
          if (Math.random() > 0.5) {
-             // Weapon
              const weapons = LOOT_NAMES[lang].weapons;
              const wName = weapons[Math.floor(Math.random() * weapons.length)];
              const boost = Math.floor(Math.random() * 3) + 1;
              newPlayer.equipmentAtk += boost;
              lootMsg = `${t.loot.found(wName)} ${t.loot.equip(t.atk, boost)}`;
          } else {
-             // Armor
              const armors = LOOT_NAMES[lang].armors;
              const aName = armors[Math.floor(Math.random() * armors.length)];
              const boost = Math.floor(Math.random() * 3) + 1;
              newPlayer.equipmentDef += boost;
              lootMsg = `${t.loot.found(aName)} ${t.loot.equip(t.def, boost)}`;
          }
-      } else if (lootRoll > 0.40) { // 35% Chance for Potion
+      } else if (lootRoll > 0.40) { 
           newPlayer.potions += 1;
           lootMsg = t.loot.found(t.potions);
       }
 
-      // Boss Cleared Logic
       if (enemy.isBoss) {
           addLog(t.dungeon.floorCleared);
           
@@ -784,21 +756,25 @@ const App: React.FC = () => {
           
           setDungeonProgress(progressUpdate);
 
-          // Handle Reincarnation (Win Game Loop)
+          let unlocked = false;
+          if (currentScene === 'AVONLEA' && progressUpdate.avonlea.b2) unlocked = true;
+          if (currentScene === 'CAVENDISH' && progressUpdate.cavendish.b2) unlocked = true;
+          
+          if (unlocked) {
+              addLog(t.dungeon.sceneUnlocked);
+              setTimeout(() => audioService.playSfx('WIN'), 800);
+          }
+
           if (triggerReincarnation) {
              const nextCount = newPlayer.reincarnationCount + 1;
-             // Apply buffs
              newPlayer.reincarnationCount = nextCount;
              newPlayer.equipmentAtk += 10;
              newPlayer.equipmentDef += 10;
              
-             // PAUSE: Don't set state/reset yet. Show Modal.
              setPendingReincarnationPlayer(newPlayer);
-             setPlayer(newPlayer); // Just update stats for display if needed
+             setPlayer(newPlayer); 
              setShowReincarnationModal(true);
-             // Stop here. The modal confirm will handle the rest.
              
-             // Still finish battle visuals
              if (leveledUp) {
                 addLog(`Level Up! You are now level ${newPlayer.level}!`);
                 setTimeout(() => audioService.playSfx('WIN'), 500);
@@ -813,7 +789,7 @@ const App: React.FC = () => {
           }
       }
 
-      setPlayer(newPlayer); // Update State if not reincarnating immediately
+      setPlayer(newPlayer); 
       
       if (leveledUp) {
           addLog(`Level Up! You are now level ${newPlayer.level}!`);
@@ -827,19 +803,16 @@ const App: React.FC = () => {
 
       setBattleState(BattleState.VICTORY);
       
-      // TRIGGER AUTO SAVE
       autoSaveGame(newPlayer);
 
-      return; // End flow
+      return; 
     }
 
-    // Delay before enemy attacks
     await new Promise(r => setTimeout(r, 1000));
 
-    // 2. Enemy Turn
     if (enemy.hp > 0) {
-      // Enemy Dmg reduced by player Defense
-      const enemyDmg = Math.max(1, enemy.attack - Math.floor(player.level / 2) - player.equipmentDef);
+      const playerDef = 5 + Math.floor(player.level / 2) + player.equipmentDef;
+      const enemyDmg = Math.max(1, enemy.attack - playerDef);
       
       audioService.playSfx('ATTACK');
       setTimeout(() => audioService.playSfx('HIT'), 200);
@@ -862,10 +835,8 @@ const App: React.FC = () => {
 
     audioService.playSfx('WIN');
     
-    // Commit the new player state
     setPlayer(pendingReincarnationPlayer);
 
-    // Reset Progress
     const resetProgress = {
        avonlea: { b1: false, b2: false },
        cavendish: { b1: false, b2: false },
@@ -873,22 +844,17 @@ const App: React.FC = () => {
     };
     setDungeonProgress(resetProgress);
     
-    // Go back to start
     setCurrentScene('AVONLEA');
     setGameState(GameState.MAP);
     setPlayerPos(MAP_START_POS);
     
-    // Auto save the fresh start
     autoSaveGame(pendingReincarnationPlayer);
     
-    // Close modal
     setShowReincarnationModal(false);
     setPendingReincarnationPlayer(null);
   };
 
-  // Town Shop Action Logic
   const handleShopTransaction = (choice: number) => {
-    // choice: 0 = Buy/Rest, 1 = Leave (Usually)
     if (choice === 1) {
         setActiveShop(null);
         setTownMessage("");
@@ -935,7 +901,7 @@ const App: React.FC = () => {
         }
     }
 
-    if (success) audioService.playSfx('HEAL'); // Using Heal sound for pleasant transaction
+    if (success) audioService.playSfx('HEAL'); 
     else {
         setTownMessage(t.town.notEnoughGold);
         audioService.playSfx('CANCEL');
@@ -951,52 +917,65 @@ const App: React.FC = () => {
   };
 
   const handleInput = useCallback((key: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'ENTER') => {
-    // Strict Input Locking
     if (loading || showSaveMenu || showLoadMenu || notification || inputCooldown || showReincarnationModal || showAboutModal) return;
 
-    // Name Input Handling is separate from main logic
     if (gameState === GameState.NAME_INPUT) {
         if (key === 'ENTER') submitName();
         return;
     }
 
-    // Basic navigation sfx for Menus
-    if (gameState !== GameState.MAP && gameState !== GameState.TOWN && (key === 'UP' || key === 'DOWN')) audioService.playSfx('SELECT');
+    if (gameState !== GameState.MAP && gameState !== GameState.TOWN && gameState !== GameState.DUNGEON && (key === 'UP' || key === 'DOWN')) audioService.playSfx('SELECT');
 
     if (gameState === GameState.TITLE) {
+      if (key === 'UP' || key === 'DOWN') {
+          setTitleSelection(prev => prev === 0 ? 1 : 0);
+          audioService.playSfx('SELECT');
+      }
       if (key === 'ENTER') {
          audioService.playSfx('CONFIRM');
-         setPlayerNameInput("");
-         setGameState(GameState.NAME_INPUT);
+         if (titleSelection === 0) {
+            setPlayerNameInput("");
+            setGameState(GameState.NAME_INPUT);
+         } else {
+             if (hasSaves) {
+                setShowLoadMenu(true);
+             } else {
+                 audioService.playSfx('CANCEL');
+             }
+         }
       }
     } 
     else if (gameState === GameState.MAP) {
-      // Map Movement Logic
       const MAP_DATA = getCurrentMapData();
       
       if (key === 'ENTER') {
           const tile = MAP_DATA[playerPos.y][playerPos.x];
           
           if (tile === 'C') {
-              // Enter Town
               audioService.playSfx('CONFIRM');
               setSelectedLocation('castle');
               setGameState(GameState.TOWN);
               setTownMessage(t.town.welcome);
-              setTownPlayerPos(TOWN_START_POS); // Reset town position
+              setTownPlayerPos(TOWN_START_POS); 
               setActiveShop(null);
-              initTownNPCs(); // Generate new NPCs
+              initTownNPCs(); 
           } else if (tile === 'V') {
-              // Enter Dungeon
               audioService.playSfx('CONFIRM');
               setSelectedLocation('volcano');
               setGameState(GameState.DUNGEON);
-              setDungeonFloor(1); // Always start at B1F
+              setDungeonFloor(1); 
+              setDungeonPlayerPos(DUNGEON_START_POS);
               setExploreLog(t.dungeon.floor(1));
               setMenuIndex(0);
-          } else if (tile === 'H' || tile === 'K' || tile === 'U') {
-             // Informational Interaction for Special Tiles
-             // Can add dialogue here if needed, currently they are passive
+          } else if (tile === 'H') {
+              audioService.playSfx('HEAL');
+              setMapMessage(t.facilityHints.house);
+          } else if (tile === 'K') {
+              audioService.playSfx('CONFIRM');
+              setMapMessage(t.facilityHints.school);
+          } else if (tile === 'U') {
+              audioService.playSfx('CONFIRM');
+              setMapMessage(t.facilityHints.academy);
           } else {
               setMapMessage(t.dungeon.nothing);
           }
@@ -1021,9 +1000,11 @@ const App: React.FC = () => {
               
               if (targetTile === 'C') setMapMessage(t.mapActions.enterTown);
               else if (targetTile === 'V') setMapMessage(t.mapActions.enterDungeon);
+              else if (targetTile === 'H') setMapMessage(t.facilityHints.house);
+              else if (targetTile === 'K') setMapMessage(t.facilityHints.school);
+              else if (targetTile === 'U') setMapMessage(t.facilityHints.academy);
               else setMapMessage("");
 
-              // Fix: Do not check random encounter on C or V or Special Tiles
               if (targetTile !== 'C' && targetTile !== 'V' && targetTile !== 'H' && targetTile !== 'K' && targetTile !== 'U') {
                   checkRandomEncounter(targetTile);
               }
@@ -1031,23 +1012,46 @@ const App: React.FC = () => {
       }
     }
     else if (gameState === GameState.TOWN) {
-        // Town Logic
         if (activeShop) {
-            // In a shop menu
             if (key === 'UP') setMenuIndex(prev => (prev - 1 + 2) % 2);
             if (key === 'DOWN') setMenuIndex(prev => (prev + 1) % 2);
             if (key === 'ENTER') handleShopTransaction(menuIndex);
         } else {
-            // Walking in Town
             if (key === 'ENTER') {
                 const tile = TOWN_MAP[townPlayerPos.y][townPlayerPos.x];
                 
-                // NPC Interaction Check
+                if (tile === 'E') {
+                    audioService.playSfx('CANCEL');
+                    setGameState(GameState.MAP);
+                    return;
+                }
+
                 const npc = townNPCs.find(n => getDist({x: n.x, y: n.y}, townPlayerPos) <= 1);
+                
                 if (npc) {
                     audioService.playSfx('CONFIRM');
-                    setTownMessage(`[${npc.name}]: ${npc.dialogue}`);
-                    return; // Prioritize talking over shops if adjacent
+                    let msg = `[${npc.name}]: ${npc.dialogue}`;
+                    
+                    if (npc.reward && !npc.rewardClaimed) {
+                        const r = npc.reward;
+                        if (r.type === 'GOLD') {
+                            setPlayer(p => ({...p, gold: p.gold + r.value}));
+                            msg += ` (獲得 ${r.value} 金幣)`;
+                        } else if (r.type === 'POTION') {
+                            setPlayer(p => ({...p, potions: p.potions + r.value}));
+                            msg += ` (獲得 ${r.value} 藥水)`;
+                        } else if (r.type === 'MAXHP') {
+                            setPlayer(p => ({...p, maxHp: p.maxHp + r.value, hp: p.hp + r.value}));
+                            msg += ` (生命上限 +${r.value})`;
+                        } else if (r.type === 'MAXMP') {
+                            setPlayer(p => ({...p, maxMp: p.maxMp + r.value, mp: p.mp + r.value}));
+                            msg += ` (魔力上限 +${r.value})`;
+                        }
+                        audioService.playSfx('WIN'); 
+                        setTownNPCs(prev => prev.map(n => n.id === npc.id ? {...n, rewardClaimed: true} : n));
+                    }
+                    setTownMessage(msg);
+                    return; 
                 }
 
                 let shop: ShopType = null;
@@ -1056,11 +1060,6 @@ const App: React.FC = () => {
                 else if (tile === 'a') shop = 'ARMOR';
                 else if (tile === 'i') shop = 'ITEM';
                 else if (tile === 'm') shop = 'MAGIC';
-                else if (tile === 'E') {
-                    audioService.playSfx('CANCEL');
-                    setGameState(GameState.MAP);
-                    return;
-                }
 
                 if (shop) {
                     audioService.playSfx('CONFIRM');
@@ -1083,9 +1082,7 @@ const App: React.FC = () => {
 
             if (newY >= 0 && newY < TOWN_MAP.length && newX >= 0 && newX < TOWN_MAP[0].length) {
                 const targetTile = TOWN_MAP[newY][newX];
-                
-                // Let's block 'T' (Tree) for immersion
-                if (targetTile !== 'T' && targetTile !== '_') {
+                if (targetTile !== 'T' && targetTile !== 'N' && targetTile !== '_') {
                     setTownPlayerPos({ x: newX, y: newY });
                     audioService.playSfx('SELECT');
                     
@@ -1102,57 +1099,79 @@ const App: React.FC = () => {
         }
     }
     else if (gameState === GameState.DUNGEON) {
-        // Dungeon Menu Logic Refactored to separate Actions from Labels
-        let actions: ('FORWARD' | 'SEARCH' | 'DEEPER' | 'SURFACE' | 'LEAVE')[] = ['FORWARD', 'SEARCH', 'LEAVE'];
+        const dMap = getDungeonMap();
         
-        // Progression Logic
-        let clearedB1 = false;
-        let clearedB2 = false;
-
-        if (currentScene === 'AVONLEA') {
-            clearedB1 = dungeonProgress.avonlea.b1;
-            clearedB2 = dungeonProgress.avonlea.b2;
-        } else if (currentScene === 'CAVENDISH') {
-            clearedB1 = dungeonProgress.cavendish.b1;
-            clearedB2 = dungeonProgress.cavendish.b2;
-        } else if (currentScene === 'CHARLOTTETOWN') {
-            clearedB1 = dungeonProgress.charlottetown.b1;
-            clearedB2 = dungeonProgress.charlottetown.b2;
-        }
-
-        if (dungeonFloor === 1 && clearedB1) actions = ['FORWARD', 'SEARCH', 'DEEPER', 'LEAVE'];
-        if (dungeonFloor === 2 && clearedB2) actions = ['FORWARD', 'SEARCH', 'SURFACE', 'LEAVE'];
-
-        const getLabel = (action: string) => {
-        switch(action) {
-            case 'FORWARD': return t.dungeon.forward;
-            case 'SEARCH': return t.dungeon.search;
-            case 'DEEPER': return t.dungeon.goDeeper;
-            case 'SURFACE': return t.dungeon.returnSurface;
-            case 'LEAVE': return t.dungeon.leave;
-            default: return action;
-        }
-    };
-
-    // Handler now matches index to action array
-    const handleClick = (idx: number) => {
-         const action = actions[idx];
-         if (action === 'FORWARD') processExploration('FORWARD');
-         if (action === 'SEARCH') processExploration('SEARCH');
-         if (action === 'DEEPER') processExploration('DEEPER');
-         if (action === 'SURFACE') processExploration('SURFACE');
-         if (action === 'LEAVE') setGameState(GameState.MAP);
-    }
-
-        if (key === 'UP') setMenuIndex(prev => (prev - 1 + actions.length) % actions.length);
-        if (key === 'DOWN') setMenuIndex(prev => (prev + 1) % actions.length);
         if (key === 'ENTER') {
-            const choice = actions[menuIndex];
-            if (choice === 'FORWARD') processExploration('FORWARD');
-            if (choice === 'SEARCH') processExploration('SEARCH');
-            if (choice === 'DEEPER') processExploration('DEEPER');
-            if (choice === 'SURFACE') processExploration('SURFACE');
-            if (choice === 'LEAVE') setGameState(GameState.MAP);
+            const tile = dMap[dungeonPlayerPos.y][dungeonPlayerPos.x];
+            
+            let cleared = false;
+            if (currentScene === 'AVONLEA') {
+                cleared = dungeonFloor === 1 ? dungeonProgress.avonlea.b1 : dungeonProgress.avonlea.b2;
+            } else if (currentScene === 'CAVENDISH') {
+                cleared = dungeonFloor === 1 ? dungeonProgress.cavendish.b1 : dungeonProgress.cavendish.b2;
+            } else if (currentScene === 'CHARLOTTETOWN') {
+                cleared = dungeonFloor === 1 ? dungeonProgress.charlottetown.b1 : dungeonProgress.charlottetown.b2;
+            }
+
+            if (tile === 'E') {
+                audioService.playSfx('CONFIRM');
+                setGameState(GameState.MAP);
+                setExploreLog("");
+            } else if (tile === 'S') {
+                audioService.playSfx('CONFIRM');
+                if (dungeonFloor === 1) {
+                    setDungeonFloor(2);
+                    setDungeonPlayerPos({x: 12, y: 1}); 
+                    setExploreLog(t.dungeon.floor(2));
+                } else {
+                    setDungeonFloor(1);
+                    setDungeonPlayerPos({x: 12, y: 1}); 
+                    setExploreLog(t.dungeon.floor(1));
+                }
+            } else if (tile === 'B') {
+                if (!cleared) {
+                     setExploreLog(t.dungeon.bossEncounter);
+                     setTimeout(() => startBattle(true), 200);
+                } else {
+                    audioService.playSfx('CONFIRM');
+                    if (dungeonFloor === 1) {
+                        setDungeonFloor(2);
+                        setDungeonPlayerPos({x: 12, y: 1}); 
+                        setExploreLog(t.dungeon.floor(2));
+                    } else {
+                        setGameState(GameState.MAP);
+                        setExploreLog("");
+                    }
+                }
+            }
+            return;
+        }
+
+        let dx = 0;
+        let dy = 0;
+        if (key === 'UP') dy = -1;
+        if (key === 'DOWN') dy = 1;
+        if (key === 'LEFT') dx = -1;
+        if (key === 'RIGHT') dx = 1;
+
+        const newX = dungeonPlayerPos.x + dx;
+        const newY = dungeonPlayerPos.y + dy;
+
+        if (newY >= 0 && newY < dMap.length && newX >= 0 && newX < dMap[0].length) {
+            const targetTile = dMap[newY][newX];
+            if (targetTile !== 'd' && targetTile !== '_') {
+                setDungeonPlayerPos({ x: newX, y: newY });
+                audioService.playSfx('SELECT');
+                
+                if (targetTile !== 'E' && targetTile !== 'S' && targetTile !== 'B') {
+                    checkRandomEncounter(targetTile);
+                }
+
+                if (targetTile === 'E') setExploreLog(t.dungeon.leave);
+                else if (targetTile === 'B') setExploreLog(t.dungeon.bossEncounter);
+                else if (targetTile === 'S') setExploreLog(dungeonFloor === 1 ? t.dungeon.goDeeper : t.dungeon.returnSurface);
+                else setExploreLog(t.dungeon.search);
+            }
         }
     }
     else if (gameState === GameState.BATTLE && battleState === BattleState.PLAYER_INPUT) {
@@ -1166,21 +1185,19 @@ const App: React.FC = () => {
     else if ((battleState === BattleState.VICTORY || battleState === BattleState.DEFEAT) && key === 'ENTER') {
         audioService.playSfx('CONFIRM');
         
-        // FIX: Reset BattleState here to prevent stale state persisting into Map
         setBattleState(BattleState.PLAYER_INPUT);
 
         if (battleState === BattleState.VICTORY) {
-            // Return to previous location based on context
             if (prevGameState === GameState.MAP || prevGameState === GameState.DUNGEON) {
                  setGameState(prevGameState);
             } else {
-                 setGameState(GameState.MAP); // Fallback
+                 setGameState(GameState.MAP); 
             }
-            // Set cooldown to prevent immediate click of dungeon menu
             setInputCooldown(true);
             setTimeout(() => setInputCooldown(false), 500);
             setMenuIndex(0);
         } else {
+            // Apply Penalty Here on Confirmation
             setPlayer(prev => {
                 const penalty = Math.floor((prev.level * 50) * 0.1);
                 const currentLevelMinExp = (prev.level - 1) * 50; 
@@ -1198,19 +1215,20 @@ const App: React.FC = () => {
             setMenuIndex(0);
         }
     }
-  }, [gameState, menuIndex, battleState, loading, player, enemy, lang, selectedLocation, playerPos, townPlayerPos, activeShop, currentScene, dungeonFloor, dungeonProgress, showSaveMenu, showLoadMenu, playerNameInput, notification, prevGameState, inputCooldown, showReincarnationModal, pendingReincarnationPlayer, townNPCs, showAboutModal]);
+  }, [gameState, menuIndex, battleState, loading, player, enemy, lang, selectedLocation, playerPos, townPlayerPos, dungeonPlayerPos, activeShop, currentScene, dungeonFloor, dungeonProgress, showSaveMenu, showLoadMenu, playerNameInput, notification, prevGameState, inputCooldown, showReincarnationModal, pendingReincarnationPlayer, townNPCs, showAboutModal, titleSelection, hasSaves]);
 
   // Click handler for tiles
-  const handleMapClick = (targetX: number, targetY: number, type: 'WORLD' | 'TOWN') => {
-      // Prevent click interactions if loading
+  const handleMapClick = (targetX: number, targetY: number, type: 'WORLD' | 'TOWN' | 'DUNGEON') => {
       if (loading || showSaveMenu || showLoadMenu || notification || inputCooldown || showReincarnationModal || showAboutModal) return;
 
       handleUserInteraction();
-      const currentPos = type === 'WORLD' ? playerPos : townPlayerPos;
+      let currentPos = playerPos;
+      if (type === 'TOWN') currentPos = townPlayerPos;
+      if (type === 'DUNGEON') currentPos = dungeonPlayerPos;
+
       const dx = targetX - currentPos.x;
       const dy = targetY - currentPos.y;
 
-      // If clicked adjacent or current
       if (Math.abs(dx) + Math.abs(dy) === 1) {
           if (dy === -1) handleInput('UP');
           if (dy === 1) handleInput('DOWN');
@@ -1221,11 +1239,9 @@ const App: React.FC = () => {
       }
   };
 
-  // Keyboard Listeners
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (loading) return; // Prevent keyboard if loading
-      // Allow typing in name input
+      if (loading) return; 
       if (gameState === GameState.NAME_INPUT) {
           if (e.key === 'Enter') handleInput('ENTER');
           return;
@@ -1340,9 +1356,9 @@ const App: React.FC = () => {
                 {saveMessage && <div className="text-center text-green-300 mb-4 animate-pulse">{saveMessage}</div>}
                 <div className="space-y-3">
                     {slots.map((slot, idx) => {
-                        const isAutoSave = idx === 4; // 5th slot (index 4)
-                        const canSave = isSave && !isAutoSave; // Cannot manual save to auto slot
-                        const canLoad = !isSave && slot; // Can only load if slot exists
+                        const isAutoSave = idx === 4; 
+                        const canSave = isSave && !isAutoSave; 
+                        const canLoad = !isSave && slot; 
 
                         return (
                             <div 
@@ -1392,7 +1408,6 @@ const App: React.FC = () => {
 
   const renderTitle = () => (
     <div className="relative w-full h-full flex flex-col items-center justify-center text-center animate-fade-in p-4">
-       {/* Version Number - Now Clickable for About Modal */}
        <div 
          className="absolute top-4 right-4 text-gray-400 font-mono text-lg md:text-2xl z-50 opacity-80 font-bold cursor-pointer hover:text-yellow-400 transition-colors underline decoration-dotted decoration-gray-600 hover:decoration-yellow-400"
          onClick={(e) => { e.stopPropagation(); setShowAboutModal(true); }}
@@ -1412,13 +1427,12 @@ const App: React.FC = () => {
        ></div>
        
        <div className="z-10 flex flex-col items-center w-full max-w-4xl">
-          {/* SVG Badge - Click for God Mode */}
           <div 
               className="mb-4 drop-shadow-[0_10px_20px_rgba(0,0,0,0.8)] animate-bounce-slight cursor-pointer hover:scale-105 transition-transform"
               onClick={(e) => {
                 e.stopPropagation();
                 handleUserInteraction();
-                audioService.playSfx('WIN'); // Secret sound
+                audioService.playSfx('WIN'); 
                 setPlayer({...GOD_MODE_PLAYER});
                 setGameState(GameState.MAP);
                 setMapMessage(t.dungeon.title);
@@ -1438,7 +1452,8 @@ const App: React.FC = () => {
           <div className="flex flex-col items-center gap-4 w-64">
             <RetroButton 
                 onClick={() => handleInput('ENTER')} 
-                active={true} 
+                active={titleSelection === 0}
+                onMouseEnter={() => setTitleSelection(0)}
                 className="justify-center text-2xl border-2 border-yellow-500 bg-black/80 hover:bg-red-900"
             >
                 {t.start}
@@ -1446,9 +1461,11 @@ const App: React.FC = () => {
 
             <RetroButton 
                 onClick={(e) => { e.stopPropagation(); setShowLoadMenu(true); audioService.playSfx('SELECT'); }} 
-                className={`justify-center text-xl border-2 border-blue-500 bg-black/80 hover:bg-blue-900 relative ${!hasSaves ? 'opacity-70' : ''}`}
+                active={titleSelection === 1}
+                onMouseEnter={() => setTitleSelection(1)}
+                className={`justify-center text-xl border-2 border-blue-500 bg-black/80 hover:bg-blue-900 flex items-center gap-2 ${!hasSaves ? 'opacity-70' : ''}`}
             >
-                {hasSaves && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-green-400 animate-pulse text-xs">●</span>}
+                {hasSaves && <span className="text-green-400 animate-pulse text-xs">●</span>}
                 {t.continue}
             </RetroButton>
 
@@ -1475,14 +1492,12 @@ const App: React.FC = () => {
     const MAP_DATA = getCurrentMapData();
     const mapName = currentScene === 'AVONLEA' ? t.scenes.avonlea : (currentScene === 'CAVENDISH' ? t.scenes.cavendish : t.scenes.charlottetown);
     
-    // Travel Button Availability (Requires Dungeon Clearance)
     const showAvonlea = currentScene !== 'AVONLEA';
     const showCavendish = currentScene !== 'CAVENDISH' && dungeonProgress.avonlea.b2;
     const showCharlottetown = currentScene !== 'CHARLOTTETOWN' && dungeonProgress.cavendish.b2;
 
     return (
     <div className="flex flex-col md:flex-row h-full bg-black gap-2">
-      {/* Left Panel: Status */}
       <div className="w-full md:w-1/4 min-w-[200px] flex flex-col gap-2 order-1">
          <RetroWindow className="flex justify-between items-center py-2 bg-slate-900 border-slate-500">
              <h2 className="text-base lg:text-xl text-yellow-300 tracking-wider flex items-center gap-2">
@@ -1494,7 +1509,6 @@ const App: React.FC = () => {
          </div>
       </div>
       
-      {/* Right Panel: Map */}
       <div className="flex-1 flex flex-col bg-gray-900 overflow-hidden relative border-4 border-gray-700 rounded p-4 items-center justify-center order-2">
           <span className="absolute top-2 left-2 z-10 text-lg md:text-xl font-bold text-yellow-300 bg-black/50 px-3 py-1 border border-yellow-600 rounded">
               {mapName}
@@ -1503,7 +1517,6 @@ const App: React.FC = () => {
               {mapMessage || "Navigate with Arrow Keys or Click"}
           </span>
           
-          {/* Fast Travel Buttons */}
           <div className="absolute top-2 right-2 z-20 flex flex-col gap-2">
               {showCharlottetown && (
                   <button onClick={() => switchScene('CHARLOTTETOWN')} className="bg-blue-800 text-white px-3 py-1 border border-white hover:bg-blue-600 text-xs md:text-sm font-bold">
@@ -1540,11 +1553,11 @@ const App: React.FC = () => {
                               onClick={() => handleMapClick(x, y, 'WORLD')}
                               className={`
                                 relative flex items-center justify-center text-sm md:text-3xl select-none cursor-pointer hover:brightness-110
-                                ${TILE_COLORS[tile]}
+                                ${TILE_COLORS[tile as TileType]}
                                 transition-colors duration-300
                               `}
                           >
-                              <span className="opacity-80 scale-75 md:scale-100 drop-shadow-md">{TILE_ICONS[tile]}</span>
+                              <span className="opacity-80 scale-75 md:scale-100 drop-shadow-md">{TILE_ICONS[tile as TileType]}</span>
                               {isPlayerHere && (
                                   <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none p-1">
                                       <div className="w-full h-full animate-bounce">
@@ -1567,10 +1580,8 @@ const App: React.FC = () => {
   };
 
   const renderTown = () => {
-    // Show Shop Menu or Town Map
     const renderRightSide = () => {
         if (activeShop) {
-            // SHOP INTERIOR VIEW - NOW WITH NPC PORTRAITS
             let shopName = "";
             let npcImage = "";
             let actionText = "";
@@ -1584,7 +1595,6 @@ const App: React.FC = () => {
             return (
                 <div className="flex-1 relative flex flex-col border-4 border-yellow-700 rounded overflow-hidden bg-[#2a1d15] order-2">
                      <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8">
-                          {/* NPC Portrait */}
                           <div className="bg-black/50 border-4 border-yellow-600 rounded-full p-2 mb-4 md:mb-6 shadow-2xl">
                               <img 
                                 src={npcImage} 
@@ -1619,14 +1629,25 @@ const App: React.FC = () => {
                 </div>
             );
         } else {
-            // TOWN MAP VIEW
             return (
                 <div className="flex-1 flex flex-col bg-slate-900 overflow-hidden relative border-4 border-slate-700 rounded p-4 items-center justify-center order-2">
-                    <span className="absolute top-2 right-2 z-10 text-xs md:text-sm text-gray-300 bg-black/50 px-2 rounded">
-                        {townMessage || t.town.welcome}
-                    </span>
+                    <div className="absolute top-2 left-2 right-2 z-20 flex justify-center pointer-events-none">
+                         {townMessage && (
+                            <div className="bg-black/80 border-2 border-white px-4 py-2 rounded-lg max-w-2xl animate-fade-in-up">
+                                <span className="text-xl md:text-2xl text-yellow-300 font-bold leading-relaxed text-left block font-serif">
+                                    {townMessage}
+                                </span>
+                            </div>
+                         )}
+                         {!townMessage && (
+                            <span className="text-xs md:text-sm text-gray-300 bg-black/50 px-2 rounded self-center">
+                                {t.town.welcome}
+                            </span>
+                         )}
+                    </div>
+
                     <div 
-                        className="grid gap-[1px] bg-black border-4 border-slate-500 shadow-2xl"
+                        className="grid gap-[1px] bg-black border-4 border-slate-500 shadow-2xl mt-8"
                         style={{ 
                             gridTemplateColumns: `repeat(${TOWN_MAP[0].length}, minmax(0, 1fr))`,
                             width: '100%',
@@ -1645,21 +1666,22 @@ const App: React.FC = () => {
                                         onClick={() => handleMapClick(x, y, 'TOWN')}
                                         className={`
                                             relative flex items-center justify-center text-sm md:text-3xl select-none cursor-pointer hover:brightness-110
-                                            ${TILE_COLORS[tile]}
+                                            ${TILE_COLORS[tile as TownTileType]}
                                         `}
                                     >
-                                        <span className="opacity-90 scale-75 md:scale-100 drop-shadow-md">{TILE_ICONS[tile]}</span>
-                                        {/* Render NPC */}
+                                        <span className="opacity-90 scale-75 md:scale-100 drop-shadow-md">{TILE_ICONS[tile as TownTileType]}</span>
                                         {npc && (
                                             <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
                                                 <img 
                                                     src={`https://api.dicebear.com/9.x/notionists/svg?seed=${npc.avatarSeed}`}
-                                                    alt="Citizen"
+                                                    alt={npc.name}
                                                     className="w-3/4 h-3/4 object-contain"
                                                 />
-                                                {/* Speech Bubble Icon if adjacent */}
                                                 {getDist({x,y}, townPlayerPos) <= 1 && (
                                                     <div className="absolute -top-1 -right-1 bg-white text-black text-[8px] px-1 rounded-full animate-bounce">💬</div>
+                                                )}
+                                                {npc.reward && !npc.rewardClaimed && (
+                                                     <div className="absolute top-0 left-0 text-[10px] animate-pulse">✨</div>
                                                 )}
                                             </div>
                                         )}
@@ -1684,110 +1706,91 @@ const App: React.FC = () => {
         }
     };
 
+    const renderDungeon = () => {
+    const dMap = getDungeonMap();
+    
+    // Check Boss Clearance for visual update
+    let cleared = false;
+    if (currentScene === 'AVONLEA') {
+        cleared = dungeonFloor === 1 ? dungeonProgress.avonlea.b1 : dungeonProgress.avonlea.b2;
+    } else if (currentScene === 'CAVENDISH') {
+        cleared = dungeonFloor === 1 ? dungeonProgress.cavendish.b1 : dungeonProgress.cavendish.b2;
+    } else if (currentScene === 'CHARLOTTETOWN') {
+        cleared = dungeonFloor === 1 ? dungeonProgress.charlottetown.b1 : dungeonProgress.charlottetown.b2;
+    }
+
     return (
       <div className="flex flex-col md:flex-row h-full bg-slate-900 gap-2">
-         {/* Left: Stats */}
-         <div className="w-full md:w-1/4 min-w-[200px] order-1">
-             <StatusPanel player={player} t={t} />
-         </div>
-         {/* Right: Town Map or Shop */}
-         {renderRightSide()}
-      </div>
-    );
-  };
-
-  const renderDungeon = () => {
-    // Dungeon Menu Logic Refactored to separate Actions from Labels
-    let actions: ('FORWARD' | 'SEARCH' | 'DEEPER' | 'SURFACE' | 'LEAVE')[] = ['FORWARD', 'SEARCH', 'LEAVE'];
-    
-    // Progression Logic
-    let clearedB1 = false;
-    let clearedB2 = false;
-
-    if (currentScene === 'AVONLEA') {
-        clearedB1 = dungeonProgress.avonlea.b1;
-        clearedB2 = dungeonProgress.avonlea.b2;
-    } else if (currentScene === 'CAVENDISH') {
-        clearedB1 = dungeonProgress.cavendish.b1;
-        clearedB2 = dungeonProgress.cavendish.b2;
-    } else if (currentScene === 'CHARLOTTETOWN') {
-        clearedB1 = dungeonProgress.charlottetown.b1;
-        clearedB2 = dungeonProgress.charlottetown.b2;
-    }
-
-    if (dungeonFloor === 1 && clearedB1) actions = ['FORWARD', 'SEARCH', 'DEEPER', 'LEAVE'];
-    if (dungeonFloor === 2 && clearedB2) actions = ['FORWARD', 'SEARCH', 'SURFACE', 'LEAVE'];
-
-    const getLabel = (action: string) => {
-        switch(action) {
-            case 'FORWARD': return t.dungeon.forward;
-            case 'SEARCH': return t.dungeon.search;
-            case 'DEEPER': return t.dungeon.goDeeper;
-            case 'SURFACE': return t.dungeon.returnSurface;
-            case 'LEAVE': return t.dungeon.leave;
-            default: return action;
-        }
-    };
-
-    // Handler now matches index to action array
-    const handleClick = (idx: number) => {
-         const action = actions[idx];
-         if (action === 'FORWARD') processExploration('FORWARD');
-         if (action === 'SEARCH') processExploration('SEARCH');
-         if (action === 'DEEPER') processExploration('DEEPER');
-         if (action === 'SURFACE') processExploration('SURFACE');
-         if (action === 'LEAVE') setGameState(GameState.MAP);
-    }
-
-    return (
-      <div className="flex flex-col md:flex-row h-full bg-red-950 gap-2">
-          {/* Left Panel: Status + Menu */}
+          {/* Left Panel: Status Only */}
           <div className="w-full md:w-1/4 min-w-[220px] flex flex-col gap-2 order-1">
-               <RetroWindow className="bg-red-900/50 border-red-400 flex flex-row items-center justify-center p-2 gap-4">
+               <RetroWindow className="bg-blue-900/50 border-blue-400 flex flex-row items-center justify-center p-2 gap-4">
                     <span className="text-3xl">💀</span>
-                    <h2 className="text-xl text-red-300 animate-pulse whitespace-nowrap">
+                    <h2 className="text-xl text-blue-300 animate-pulse whitespace-nowrap">
                         {t.dungeon.floor(dungeonFloor)}
                     </h2>
                </RetroWindow>
-
-               <div className="flex flex-col justify-center bg-black/40 p-2 rounded border border-red-900/50 mb-2">
-                    <div className="space-y-4 w-full">
-                        {actions.map((action, idx) => (
-                             <RetroButton 
-                                key={action}
-                                active={menuIndex === idx} 
-                                onClick={(e) => { e.stopPropagation(); handleClick(idx); }}
-                                onMouseEnter={() => setMenuIndex(idx)}
-                                className="text-center justify-center py-2 text-lg bg-red-900/60 border-red-400"
-                            >
-                                {getLabel(action)}
-                            </RetroButton>
-                        ))}
-                    </div>
-               </div>
 
                <div className="flex-1">
                  <StatusPanel player={player} t={t} />
                </div>
           </div>
 
-          {/* Right Panel: Visuals & Log */}
-          <div className="flex-1 flex flex-col relative border-4 border-red-800 rounded bg-black overflow-hidden order-2">
+          <div className="flex-1 flex flex-col bg-black overflow-hidden relative border-4 border-blue-800 rounded p-4 items-center justify-center order-2">
               <div 
-                  className="absolute inset-0 opacity-40 blur-sm pointer-events-none"
-                  style={{ backgroundImage: `url("${selectedLocation ? LOCATION_IMAGES[selectedLocation] : ''}")`, backgroundSize: 'cover' }}
+                  className="absolute inset-0 opacity-20 pointer-events-none"
+                  style={{ backgroundImage: `url("${LOCATION_IMAGES.volcano}")`, backgroundSize: 'cover' }}
               ></div>
               
-              <div className="z-10 flex-1 flex flex-col p-6 items-center justify-center pointer-events-none">
-                   {/* Main Log Display Area */}
-                   <RetroWindow className="w-full max-w-3xl h-full flex flex-col justify-center items-center text-center bg-black/80 border-red-500 shadow-[0_0_15px_rgba(220,38,38,0.4)] pointer-events-auto">
-                        <div className="text-2xl md:text-3xl text-red-100 font-bold mb-4">
-                            {exploreLog.split('!')[0]}...
-                        </div>
-                        <div className="text-lg md:text-xl text-gray-300">
-                             {exploreLog}
-                        </div>
-                   </RetroWindow>
+              <span className="absolute top-2 left-2 z-10 text-lg font-bold text-blue-300 bg-black/50 px-3 py-1 border border-blue-600 rounded">
+                 {exploreLog || t.dungeon.title}
+              </span>
+
+              <div 
+                  className="grid gap-[1px] bg-black border-4 border-blue-900 shadow-2xl z-10"
+                  style={{ 
+                      gridTemplateColumns: `repeat(${dMap[0].length}, minmax(0, 1fr))`,
+                      width: '100%',
+                      maxWidth: '800px',
+                      aspectRatio: `${dMap[0].length}/${dMap.length}`
+                  }}
+              >
+                  {dMap.map((row, y) => (
+                      row.map((tile, x) => {
+                          const isPlayerHere = x === dungeonPlayerPos.x && y === dungeonPlayerPos.y;
+                          
+                          // Dynamic Tile Logic
+                          let displayTile = tile;
+                          if (tile === 'B' && cleared) {
+                              // If Boss is dead, show Stairs Down (B1) or Exit (B2)
+                              displayTile = dungeonFloor === 1 ? 'S' : 'E';
+                          }
+
+                          return (
+                              <div 
+                                  key={`${x}-${y}`}
+                                  onClick={() => handleMapClick(x, y, 'DUNGEON')}
+                                  className={`
+                                    relative flex items-center justify-center text-sm md:text-3xl select-none cursor-pointer hover:brightness-110
+                                    ${TILE_COLORS[displayTile as DungeonTileType]}
+                                  `}
+                              >
+                                  <span className="opacity-90 scale-75 md:scale-100 drop-shadow-md">{TILE_ICONS[displayTile as DungeonTileType]}</span>
+                                  
+                                  {isPlayerHere && (
+                                      <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none p-1">
+                                          <div className="w-full h-full animate-bounce">
+                                            <img 
+                                                src={PLAYER_SPRITE_URL} 
+                                                alt="Player" 
+                                                className="w-full h-full object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] scale-x-[-1]" 
+                                            />
+                                          </div>
+                                      </div>
+                                  )}
+                              </div>
+                          );
+                      })
+                  ))}
               </div>
           </div>
       </div>
@@ -1797,10 +1800,8 @@ const App: React.FC = () => {
   const getLevelColor = (level: number, isBoss: boolean) => {
       if (isBoss) return "text-red-600 animate-pulse font-extrabold shadow-white";
       
-      // Calculate level range for current context to determine color
       let min = 1;
       let max = 8;
-      
       let additive = 0;
       if (currentScene === 'CAVENDISH') additive = 5;
       if (currentScene === 'CHARLOTTETOWN') additive = 10;
@@ -1809,15 +1810,11 @@ const App: React.FC = () => {
           min = (dungeonFloor === 1 ? 5 : 8) + additive;
           max = (dungeonFloor === 1 ? 9 : 10) + additive;
       } else {
-          // Field
           if (currentScene === 'AVONLEA') { min = 1; max = 8; }
           if (currentScene === 'CAVENDISH') { min = 6; max = 13; }
           if (currentScene === 'CHARLOTTETOWN') { min = 11; max = 18; }
       }
       
-      // Safety if range is flat
-      if (min === max) return "text-yellow-400";
-
       const range = max - min;
       const lowCap = min + (range / 3);
       const highStart = max - (range / 3);
@@ -1829,14 +1826,11 @@ const App: React.FC = () => {
 
   const renderBattle = () => (
     <div className="flex flex-col md:flex-row h-full relative gap-2 bg-black">
-      {/* Left Panel: Status */}
       <div className="w-full md:w-1/4 min-w-[200px] flex flex-col order-1">
           <StatusPanel player={player} t={t} /> 
       </div>
 
-      {/* Right Panel: Scene + Actions */}
       <div className="flex-1 flex flex-col h-full gap-2 order-2">
-          {/* Top: Scene */}
           <div 
             className="flex-[2] relative bg-black border-4 border-white rounded overflow-hidden flex items-center justify-center bg-cover bg-center transition-all duration-500"
             style={{ 
@@ -1849,7 +1843,6 @@ const App: React.FC = () => {
             
             {!loading && enemy && (
                 <div className={`relative flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 w-full max-w-4xl p-4 transition-opacity duration-300 ${battleState === BattleState.VICTORY ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
-                    {/* Monster visual */}
                     <div className="w-1/2 flex items-center justify-center animate-bounce-slight">
                         <img 
                             src={enemy.imageUrl} 
@@ -1859,7 +1852,6 @@ const App: React.FC = () => {
                         />
                     </div>
                     
-                    {/* Stats Info (Detailed) */}
                     <div className="w-full md:w-1/2 bg-black/80 p-2 md:p-6 border-2 border-white text-left rounded-lg shadow-xl backdrop-blur-md">
                         <div className={`text-lg md:text-3xl font-bold mb-2 tracking-widest flex items-center gap-2`}>
                             <span className={`text-xs md:text-base align-middle mr-1 border border-current px-1 rounded ${getLevelColor(enemy.level, !!enemy.isBoss)}`}>Lv.{enemy.level}</span>
@@ -1884,7 +1876,6 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {/* Victory/Defeat Overlay */}
             {(battleState === BattleState.VICTORY || battleState === BattleState.DEFEAT) && (
                 <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
                     <div className={`text-4xl md:text-8xl font-bold mb-6 animate-bounce drop-shadow-[0_0_20px_rgba(0,0,0,1)] ${battleState === BattleState.VICTORY ? 'text-yellow-400' : 'text-red-700 font-["Nosifer"]'}`}>
@@ -1892,8 +1883,17 @@ const App: React.FC = () => {
                            (enemy?.isBoss ? (lang === Language.ZH ? '大獲全勝！' : 'GLORIOUS VICTORY!') : (lang === Language.ZH ? '勝利！' : 'VICTORY!')) 
                            : (lang === Language.ZH ? '全軍覆沒...' : 'DEFEAT...')}
                     </div>
+                    
+                    {battleState === BattleState.DEFEAT && (
+                        <div className="bg-red-900/90 border-2 border-white px-4 py-2 text-lg md:text-xl text-yellow-300 mb-4 animate-pulse shadow-lg pointer-events-auto">
+                            {lang === Language.ZH 
+                                ? `HP/MP 歸零... 失去意識。\n預計損失經驗值: ${Math.floor((player.level * 50) * 0.1)}`
+                                : `HP/MP Depleted... Passed out.\nEst. XP Loss: ${Math.floor((player.level * 50) * 0.1)}`}
+                        </div>
+                    )}
+
                     {!showReincarnationModal && (
-                        <div className="bg-blue-900/90 border-2 border-white px-8 py-4 text-xl md:text-2xl animate-pulse shadow-[0_0_30px_rgba(59,130,246,0.6)] rounded-lg pointer-events-auto cursor-pointer" onClick={() => handleInput('ENTER')}>
+                        <div className="bg-blue-900/90 border-2 border-white px-8 py-4 text-xl md:text-2xl animate-pulse shadow-[0_0_30px_rgba(59,130,246,0.6)] rounded-lg pointer-events-auto cursor-pointer mt-4" onClick={() => handleInput('ENTER')}>
                             {lang === Language.ZH ? '點擊任意處繼續 ▶' : 'Click Anywhere to Continue ▶'}
                         </div>
                     )}
@@ -1901,9 +1901,7 @@ const App: React.FC = () => {
             )}
           </div>
 
-          {/* Bottom: Logs & Commands */}
           <div className="flex-1 flex gap-2 min-h-[140px] md:min-h-[160px]">
-             {/* Command Menu */}
              <RetroWindow className="w-1/3 flex flex-col justify-center space-y-1 overflow-y-auto">
                 {['PHYSICAL', 'MAG_ATK', 'MAG_HEAL', 'ITEM', 'FLEE'].map((action, idx) => (
                     <RetroButton 
@@ -1925,7 +1923,6 @@ const App: React.FC = () => {
                         disabled={battleState !== BattleState.PLAYER_INPUT}
                         className={`${battleState !== BattleState.PLAYER_INPUT ? 'opacity-50' : ''} text-sm md:text-lg py-1 md:py-2`}
                     >
-                        {/* Removed red dot as requested */}
                         {action === 'PHYSICAL' ? t.cmdPhysical : 
                         action === 'MAG_ATK' ? t.cmdMagAtk : 
                         action === 'MAG_HEAL' ? t.cmdMagHeal : 
@@ -1934,7 +1931,6 @@ const App: React.FC = () => {
                 ))}
              </RetroWindow>
 
-             {/* Message Log */}
              <RetroWindow className="flex-1 overflow-hidden flex flex-col bg-blue-900/90" title="ADVENTURE LOG">
                 <div className="flex-1 overflow-y-auto font-mono text-sm md:text-base leading-relaxed space-y-1 p-2" ref={scrollRef}>
                     {battleLogs.map((log, i) => (
@@ -1953,7 +1949,6 @@ const App: React.FC = () => {
     <div className="w-full h-screen bg-black flex items-center justify-center p-0 md:p-4 select-none font-['DotGothic16']" onClick={handleUserInteraction}>
       <div className="scanlines"></div>
       
-      {/* Floating Save Button (Top Right) */}
       {(gameState === GameState.MAP || gameState === GameState.TOWN || gameState === GameState.DUNGEON) && (
           <div className="fixed top-2 right-16 md:top-6 md:right-24 z-[100] flex gap-2">
             <button 
@@ -1973,7 +1968,6 @@ const App: React.FC = () => {
           </div>
       )}
 
-      {/* Sound Toggle */}
       <button 
         onClick={toggleMute}
         className="fixed top-2 right-2 md:top-6 md:right-6 z-[100] bg-gray-800 border-2 border-white text-white w-10 h-10 md:w-14 md:h-14 rounded-full flex items-center justify-center hover:bg-gray-700 active:scale-95 shadow-[0_0_15px_rgba(255,255,255,0.3)] transition-transform"
@@ -1986,16 +1980,12 @@ const App: React.FC = () => {
         )}
       </button>
 
-      {/* Save/Load Overlay */}
       {(showSaveMenu || showLoadMenu) && renderSaveLoadMenu()}
       
-      {/* About Modal */}
       {showAboutModal && renderAboutModal()}
 
-      {/* Reincarnation Overlay */}
       {showReincarnationModal && renderReincarnationModal()}
 
-      {/* Auto Save Notification */}
       {notification && (
           <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80">
               <div className="bg-blue-900 border-2 border-white px-8 py-4 text-xl text-yellow-300 animate-pulse shadow-xl rounded">
@@ -2004,9 +1994,7 @@ const App: React.FC = () => {
           </div>
       )}
       
-      {/* Main Game Container - RWD Update */}
       <div className="w-full max-w-[1280px] h-[100dvh] md:max-h-[90vh] md:aspect-video bg-gray-900 relative shadow-2xl flex flex-col border-0 md:border-[12px] border-gray-700 rounded-none md:rounded-xl overflow-hidden box-border">
-        {/* Screen Content */}
         <div className="flex-1 p-0 md:p-6 bg-[#0a0a0a] relative flex flex-col">
             {gameState === GameState.TITLE && renderTitle()}
             {gameState === GameState.NAME_INPUT && renderNameInput()}
@@ -2017,15 +2005,13 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Controls */}
       <VirtualPad 
         onUp={() => handleInput('UP')}
         onDown={() => handleInput('DOWN')}
         onSelect={() => handleInput('ENTER')}
       />
       
-      {/* Map Virtual Controls */}
-      {(gameState === GameState.MAP || (gameState === GameState.TOWN && !activeShop)) && (
+      {(gameState === GameState.MAP || (gameState === GameState.TOWN && !activeShop) || gameState === GameState.DUNGEON) && (
         <div className="fixed bottom-4 left-4 z-50 md:hidden flex gap-4 opacity-80">
              <button 
                onClick={() => handleInput('LEFT')}
@@ -2041,82 +2027,5 @@ const App: React.FC = () => {
   );
 };
 
-// Sub-component for cleanliness
-const StatusPanel = ({ player, t }: { player: Player, t: Translation }) => {
-    // Current Level Max Exp Calculation (approx)
-    const nextLevelExp = player.level * 50; 
-
-    // Add Reincarnation count to title
-    const displayTitle = player.reincarnationCount > -1 
-        ? `${player.name} ★${player.reincarnationCount}`
-        : player.name;
-
-    return (
-    <RetroWindow title={displayTitle} className="h-full bg-blue-900/80 flex flex-col p-2 md:p-4">
-        <div className="space-y-1 md:space-y-3 text-sm md:text-2xl font-bold tracking-wide flex-1">
-            {/* Improved Level Display Row */}
-            <div className="flex items-center gap-2 border-b border-blue-700 pb-1 text-base md:text-lg">
-                <span className="text-yellow-400 whitespace-nowrap">{t.lvl} {player.level}</span>
-                <div className="flex-1 flex items-center gap-2">
-                    <div className="flex-1 bg-gray-800 h-2 rounded-full overflow-hidden border border-gray-500 relative">
-                        <div 
-                            className="bg-purple-500 h-full" 
-                            style={{ width: `${Math.min(100, (player.exp / nextLevelExp) * 100)}%` }}
-                        ></div>
-                    </div>
-                    <span className="text-[10px] md:text-xs text-gray-400">{player.exp}/{nextLevelExp}</span>
-                </div>
-            </div>
-            
-            <div className="space-y-1">
-                <div className="flex justify-between text-xs md:text-base text-gray-300">
-                    <span>{t.hp}</span>
-                    <span>{player.hp.toLocaleString()}/{player.maxHp.toLocaleString()}</span>
-                </div>
-                <div className="w-full bg-gray-800 h-2 md:h-3 rounded-full overflow-hidden border border-gray-500">
-                    <div className="bg-gradient-to-r from-green-600 to-green-400 h-full" style={{ width: `${(player.hp / player.maxHp) * 100}%` }}></div>
-                </div>
-            </div>
-
-            <div className="space-y-1">
-                <div className="flex justify-between text-xs md:text-base text-gray-300">
-                    <span>{t.mp}</span>
-                    <span>{player.mp.toLocaleString()}/{player.maxMp.toLocaleString()}</span>
-                </div>
-                <div className="w-full bg-gray-800 h-2 md:h-3 rounded-full overflow-hidden border border-gray-500">
-                    <div className="bg-gradient-to-r from-blue-600 to-blue-400 h-full" style={{ width: `${(player.mp / player.maxMp) * 100}%` }}></div>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 mt-1 md:mt-2 pt-1 md:pt-2 border-t border-blue-700 text-sm md:text-lg">
-                <div className="text-red-300">{t.atk}: {(Math.floor(player.level * 2) + player.equipmentAtk).toLocaleString()}</div>
-                <div className="text-blue-300">{t.def}: {(Math.floor(player.level / 2) + player.equipmentDef).toLocaleString()}</div>
-            </div>
-
-             {/* Inventory & Equips - Improved Vertical Alignment with Grid */}
-             <div className="mt-1 md:mt-2 pt-1 md:pt-2 border-t border-blue-700 space-y-1 text-xs md:text-base hidden md:block">
-                <div className="grid grid-cols-[24px_1fr] gap-2 text-orange-300 items-center">
-                     <span className="flex justify-center">⚔️</span>
-                     <span>{t.atk} +{player.equipmentAtk.toLocaleString()}</span>
-                </div>
-                <div className="grid grid-cols-[24px_1fr] gap-2 text-gray-300 items-center">
-                     <span className="flex justify-center">🛡️</span>
-                     <span>{t.def} +{player.equipmentDef.toLocaleString()}</span>
-                </div>
-                <div className="grid grid-cols-[24px_1fr] gap-2 text-purple-300 items-center">
-                     <span className="flex justify-center"><img src={POTION_ICON_URL} alt="Potion" className="w-4 h-4 object-contain" /></span>
-                     <span>{t.potions} {player.potions.toLocaleString()}</span>
-                </div>
-            </div>
-
-            <div className="mt-1 md:mt-4 pt-1 md:pt-2 border-t border-blue-700 text-sm md:text-lg text-yellow-200">
-                💰 {player.gold.toLocaleString()} G
-            </div>
-            
-
-        </div>
-    </RetroWindow>
-    );
-};
-
 export default App;
+    

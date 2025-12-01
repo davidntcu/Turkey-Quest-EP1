@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Dino Quest</title>
+    <title>Turkey Quest EP1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=VT323&family=DotGothic16&display=swap');
@@ -12,12 +11,11 @@
       body {
         background-color: #1a1a1a;
         color: white;
-        font-family: 'DotGothic16', sans-serif; /* Good for bilingual retro look */
-        overflow: hidden; /* Prevent scrolling on mobile */
+        font-family: 'DotGothic16', sans-serif;
+        overflow: hidden;
         touch-action: none;
       }
       
-      /* Retro Scanline Effect */
       .scanlines {
         background: linear-gradient(
           to bottom,
@@ -36,7 +34,6 @@
         z-index: 50;
       }
 
-      /* Custom Scrollbar for logs */
       ::-webkit-scrollbar {
         width: 8px;
       }
@@ -48,7 +45,6 @@
         border: 2px solid #000;
       }
       
-      /* Pixel Art scaling */
       img {
         image-rendering: pixelated;
       }
@@ -59,12 +55,18 @@
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0"
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "vite": "https://aistudiocdn.com/vite@^7.2.4",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
   <body>
     <div id="root"></div>
-  </body>
+    <!-- 這是 Vite 的進入點，必須加入這行瀏覽器才知道要執行 React -->
+    <script type="module" src="./index.tsx"></script>
+  <script type="module" src="/index.tsx"></script>
+</body>
 </html>

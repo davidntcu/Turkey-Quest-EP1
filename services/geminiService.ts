@@ -3,6 +3,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Enemy, Language } from '../types';
 import { MONSTER_FALLBACK_URL } from '../constants';
 
+// Shim process for browser environment to fix TS error
+declare const process: any;
+
 // Use a fallback if API key is not present to prevent app crash
 const getClient = () => {
   if (!process.env.API_KEY) {
@@ -53,7 +56,7 @@ export const generateDinosaur = async (targetLevel: number, lang: Language): Pro
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -73,20 +76,25 @@ export const generateDinosaur = async (targetLevel: number, lang: Language): Pro
       }
     });
 
-    const data = JSON.parse(response.text);
+    const data = JSON.parse(response.text || '{}');
     
     // Step 2: Generate Image based on the visual prompt
-    // Removed strict short timeout race condition. We prioritize quality/AI over speed.
-    // Set a generous 15s timeout just to prevent infinite hangs.
+    // Upgraded to Pro Image model for better quality
     let imageUrl = MONSTER_FALLBACK_URL; // default fallback
 
     try {
       const imagePrompt = `Pixel art sprite of a ${data.visualPrompt}. Retro 16-bit RPG style monster, isolated on white background, full body visible. High quality, crisp lines, fantasy style.`;
       
       const imageGenPromise = ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
+        model: 'gemini-3-pro-image-preview',
         contents: {
           parts: [{ text: imagePrompt }]
+        },
+        config: {
+            imageConfig: {
+                aspectRatio: "1:1",
+                imageSize: "1K"
+            }
         }
       });
 
@@ -127,7 +135,7 @@ export const generateDinosaur = async (targetLevel: number, lang: Language): Pro
     console.error("Gemini API Error:", error);
     // Fallback on error
     return {
-      name: isZh ? "錯誤火雞" : "Glitch-Gobbler",
+      name: isZh ? "AI額度錯誤火雞" : "Glitch-Gobbler out of AI point",
       level: targetLevel,
       hp: 100,
       maxHp: 100,
@@ -135,7 +143,7 @@ export const generateDinosaur = async (targetLevel: number, lang: Language): Pro
       maxMp: 50,
       attack: 20,
       defense: 10,
-      description: isZh ? "因網路錯誤而誕生的數據家禽。" : "A digital poultry born from a network error.",
+      description: isZh ? "因AI額度用完錯誤而誕生的怪物。" : "A digital poultry born from out of AI point.",
       imageUrl: MONSTER_FALLBACK_URL
     };
   }
