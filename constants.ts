@@ -1,7 +1,7 @@
 
 import { Language, Translation, TileType, TownTileType, DungeonTileType, SceneType } from './types';
 
-export const GAME_VERSION = "v1.3.1";
+export const GAME_VERSION = "v1.3.2";
 
 export const TRANSLATIONS: Record<Language, Translation> = {
   [Language.EN]: {
@@ -119,7 +119,7 @@ export const TRANSLATIONS: Record<Language, Translation> = {
     },
     reincarnationModal: {
       title: "The Cycle of Rebirth",
-      message: (n) => `Congratulations! You have defeated the ultimate evil of Prince Edward Island.\n\nYour spirit will now transmigrate to a new timeline.\n\nYou retain your Level, Gold, and Equipment.\nMonsters will become stronger in the next cycle.`,
+      message: (n) => `Congratulations! You have defeated the ultimate evil of Prince Edward Island.\n\nYour spirit will now transmigrate to a new timeline.\n\nYou retain your Level, Gold, and Equipment.\nMonsters will become stronger in the next cycle.\n\nRank: ${n}`,
       bonus: "REWARD: ATK +10, DEF +10",
       confirm: "Accept Reincarnation"
     },
@@ -251,7 +251,7 @@ export const TRANSLATIONS: Record<Language, Translation> = {
     },
     reincarnationModal: {
       title: "傳說的終結與開始",
-      message: (n) => `恭喜戰勝愛德華王子島的最終霸主！\n\n作為獎勵，您的靈魂將經歷轉生，\n繼承現有的等級、金幣與裝備，\n並前往新的輪迴。\n\n下個輪迴的怪物將會更強大，\n請準備好迎接挑戰。`,
+      message: (n) => `恭喜戰勝愛德華王子島的最終霸主！\n\n作為獎勵，您的靈魂將經歷轉生，\n繼承現有的等級、金幣與裝備，\n並前往新的輪迴。\n\n下個輪迴的怪物將會更強大，\n請準備好迎接挑戰。\n\n目前轉生次數：${n}`,
       bonus: "轉生獎勵：攻擊力 +10，防禦力 +10",
       confirm: "接受轉生，開啟新冒險"
     },
@@ -303,7 +303,6 @@ export const GOD_MODE_PLAYER = {
 export const PLAYER_SPRITE_URL = "https://api.dicebear.com/9.x/adventurer/svg?seed=Zoey&hair=long02";
 export const POTION_ICON_URL = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none'><path d='M35 25 h30 v10 h-10 v15 h15 a5 5 0 0 1 5 5 v30 a10 10 0 0 1 -10 10 h-40 a10 10 0 0 1 -10 -10 v-30 a5 5 0 0 1 5 -5 h15 v-15 h-10 z' fill='%23e11d48' stroke='%23fff' stroke-width='2'/><path d='M40 20 h20 v5 h-20 z' fill='%239f1239'/></svg>";
 export const MONSTER_FALLBACK_URL = "https://cdn-icons-png.flaticon.com/512/1895/1895685.png"; 
-export const TITLE_BADGE_URL = "https://images.unsplash.com/photo-1618519764620-7403abdbdfe9?q=80&w=600&auto=format&fit=crop"; 
 
 export const LOCATION_IMAGES = {
   forest: "https://images.unsplash.com/photo-1448375240586-dfd8d395ea6c?q=80&w=1200&auto=format&fit=crop",
@@ -521,4 +520,3 @@ export const DUNGEON_B2_MAP: DungeonTileType[][] = [
 export const MAP_START_POS = { x: 2, y: 2 };
 export const TOWN_START_POS = { x: 6, y: 7 }; 
 export const DUNGEON_START_POS = { x: 1, y: 7 };
-    

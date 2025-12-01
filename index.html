@@ -5,14 +5,49 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Turkey Quest EP1</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            animation: {
+              'fade-in': 'fadeIn 0.5s ease-out',
+              'fade-in-up': 'fadeInUp 0.3s ease-out',
+              'bounce-slight': 'bounceSlight 2s infinite',
+              'pulse': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              fadeInUp: {
+                '0%': { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              bounceSlight: {
+                '0%, 100%': { transform: 'translateY(-2%)' },
+                '50%': { transform: 'translateY(0)' },
+              }
+            }
+          }
+        }
+      }
+    </script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=VT323&family=DotGothic16&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Nosifer&display=swap');
       
+      html, body, #root {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
       body {
-        background-color: #1a1a1a;
+        background-color: #000;
         color: white;
         font-family: 'DotGothic16', sans-serif;
-        overflow: hidden;
+        overflow: hidden; /* Prevent scrolling on body */
         touch-action: none;
       }
       
@@ -41,32 +76,31 @@
         background: #000; 
       }
       ::-webkit-scrollbar-thumb {
-        background: #fff; 
-        border: 2px solid #000;
+        background: #333; 
+        border: 1px solid #000;
+        border-radius: 4px;
       }
       
       img {
         image-rendering: pixelated;
       }
     </style>
-  <script type="importmap">
+<script type="importmap">
 {
   "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "vite": "https://aistudiocdn.com/vite@^7.2.4",
+    "vite": "https://aistudiocdn.com/vite@^7.2.6",
     "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
   <body>
     <div id="root"></div>
-    <!-- 這是 Vite 的進入點，必須加入這行瀏覽器才知道要執行 React -->
-    <script type="module" src="./index.tsx"></script>
-  <script type="module" src="/index.tsx"></script>
+    <!-- Point to root index.tsx -->
+    <script type="module" src="/index.tsx"></script>
 </body>
 </html>
