@@ -1,7 +1,7 @@
 
 import { Language, Translation, TileType, TownTileType, DungeonTileType, SceneType } from './types';
 
-export const GAME_VERSION = "v1.3.2";
+export const GAME_VERSION = "v1.3.4";
 
 export const TRANSLATIONS: Record<Language, Translation> = {
   [Language.EN]: {

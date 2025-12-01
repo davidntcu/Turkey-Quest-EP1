@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RetroWindow, RetroButton, TitleBadge } from './components/RetroUI';
 import { VirtualPad } from './components/VirtualPad';
@@ -109,7 +110,7 @@ const StatusPanel = ({ player, t }: { player: Player, t: Translation }) => {
     );
 };
 
-export const App = () => {
+export const App: React.FC = () => {
   // --- State ---
   const [lang, setLang] = useState<Language>(Language.ZH);
   const [gameState, setGameState] = useState<GameState>(GameState.TITLE);
@@ -309,7 +310,6 @@ export const App = () => {
     const interval = setInterval(() => {
         const mapData = getCurrentMapData();
         const tile = mapData[playerPos.y][playerPos.x];
-        let effected = false;
 
         if (tile === 'H' && (player.hp < player.maxHp || player.mp < player.maxMp)) {
              setPlayer((p: Player) => ({
@@ -317,12 +317,10 @@ export const App = () => {
                  hp: Math.min(p.maxHp, p.hp + 1),
                  mp: Math.min(p.maxMp, p.mp + 1)
              }));
-             effected = true;
         }
 
         if (tile === 'K') {
             setPlayer((p: Player) => ({ ...p, gold: p.gold + 10 }));
-            effected = true;
         }
 
         if (tile === 'U') {
@@ -330,7 +328,6 @@ export const App = () => {
             if (academyTimer.current >= 5) {
                 setPlayer((p: Player) => ({ ...p, potions: p.potions + 1 }));
                 academyTimer.current = 0;
-                effected = true;
             }
         } else {
             academyTimer.current = 0;
@@ -498,16 +495,18 @@ export const App = () => {
     if (currentScene === 'CAVENDISH') additive = 5;
     if (currentScene === 'CHARLOTTETOWN') additive = 10;
 
-    sceneMin += additive;
-    sceneMax += additive;
+    // Reincarnation Scaling: +2 Level per Rank
+    const rankBonus = player.reincarnationCount * 2;
+    sceneMin += additive + rankBonus;
+    sceneMax += additive + rankBonus;
 
     if (gameState === GameState.DUNGEON) {
-        if (dungeonFloor === 1) { return Math.floor(Math.random() * ((9 + additive) - (5 + additive) + 1)) + (5 + additive); } 
-        if (dungeonFloor === 2) { return Math.floor(Math.random() * ((10 + additive) - (8 + additive) + 1)) + (8 + additive); } 
+        if (dungeonFloor === 1) { return Math.floor(Math.random() * ((9 + additive + rankBonus) - (5 + additive + rankBonus) + 1)) + (5 + additive + rankBonus); } 
+        if (dungeonFloor === 2) { return Math.floor(Math.random() * ((10 + additive + rankBonus) - (8 + additive + rankBonus) + 1)) + (8 + additive + rankBonus); } 
         
         if (isBoss) {
             const baseBossLvl = dungeonFloor === 1 ? 10 : 15;
-            return baseBossLvl + additive;
+            return baseBossLvl + additive + rankBonus;
         }
     } 
 
@@ -1238,6 +1237,47 @@ export const App = () => {
           if (dx === 1) handleInput('RIGHT');
       } else if (dx === 0 && dy === 0) {
           handleInput('ENTER');
+      } else if (type === 'WORLD') {
+          // Allow clicking distant tiles on world map to inspect facilities
+          const MAP_DATA = getCurrentMapData();
+          if (targetY >= 0 && targetY < MAP_DATA.length && targetX >= 0 && targetX < MAP_DATA[0].length) {
+             const tile = MAP_DATA[targetY][targetX];
+             audioService.playSfx('SELECT');
+             if (tile === 'H') setMapMessage(t.facilityHints.house);
+             else if (tile === 'K') setMapMessage(t.facilityHints.school);
+             else if (tile === 'U') setMapMessage(t.facilityHints.academy);
+             else if (tile === 'C') setMapMessage(t.mapActions.enterTown);
+             else if (tile === 'V') setMapMessage(t.mapActions.enterDungeon);
+          }
+      } else if (type === 'TOWN') {
+          const tile = TOWN_MAP[targetY][targetX];
+          if (['g','w','a','i','m'].includes(tile as string)) {
+              audioService.playSfx('SELECT');
+              let msg = "";
+              if (tile === 'g') msg = `${t.town.shops.guild}: ${t.town.actions.rest(20)}`;
+              if (tile === 'w') msg = `${t.town.shops.weapon}: ${t.town.actions.buyWeapon(100 * player.level)}`;
+              if (tile === 'a') msg = `${t.town.shops.armor}: ${t.town.actions.buyArmor(100 * player.level)}`;
+              if (tile === 'i') msg = `${t.town.shops.item}: ${t.town.actions.buyPotion(20)}`;
+              if (tile === 'm') msg = `${t.town.shops.magic}: ${t.town.actions.buyMagic(200 * player.level)}`;
+              setTownMessage(msg);
+          }
+      } else if (type === 'DUNGEON') {
+          const dMap = getDungeonMap();
+          let cleared = false;
+          if (currentScene === 'AVONLEA') cleared = dungeonFloor === 1 ? dungeonProgress.avonlea.b1 : dungeonProgress.avonlea.b2;
+          else if (currentScene === 'CAVENDISH') cleared = dungeonFloor === 1 ? dungeonProgress.cavendish.b1 : dungeonProgress.cavendish.b2;
+          else if (currentScene === 'CHARLOTTETOWN') cleared = dungeonFloor === 1 ? dungeonProgress.charlottetown.b1 : dungeonProgress.charlottetown.b2;
+
+          const tile = dMap[targetY][targetX];
+          let displayTile = tile;
+          if (tile === 'B' && cleared) displayTile = dungeonFloor === 1 ? 'S' : 'E';
+
+          if (['S','E','B'].includes(displayTile as string)) {
+              audioService.playSfx('SELECT');
+              if (displayTile === 'E') setExploreLog(t.dungeon.leave);
+              else if (displayTile === 'B') setExploreLog(t.dungeon.bossEncounter);
+              else if (displayTile === 'S') setExploreLog(dungeonFloor === 1 ? t.dungeon.goDeeper : t.dungeon.returnSurface);
+          }
       }
   };
 
@@ -1582,7 +1622,7 @@ export const App = () => {
   };
 
   const renderTown = () => {
-    const renderContent = () => {
+    const renderRightSide = () => {
         if (activeShop) {
             let shopName = "";
             let npcImage = "";
@@ -1709,19 +1749,20 @@ export const App = () => {
     };
 
     return (
-      <div className="flex flex-col md:flex-row h-full bg-black gap-2">
-          <div className="w-full md:w-1/4 min-w-[200px] flex flex-col gap-2 order-1">
-               <RetroWindow className="flex justify-between items-center py-2 bg-slate-900 border-slate-500">
-                     <h2 className="text-base lg:text-xl text-yellow-300 tracking-wider flex items-center gap-2">
-                         <span>🏰</span> Thanksgiving Keep
-                     </h2>
-               </RetroWindow>
-               <div className="flex-1">
-                 <StatusPanel player={player} t={t} />
-               </div>
-          </div>
-          {renderContent()}
-      </div>
+        <div className="flex flex-col md:flex-row h-full bg-black gap-2">
+            <div className="w-full md:w-1/4 min-w-[200px] flex flex-col gap-2 order-1">
+                <RetroWindow className="bg-blue-900/50 border-blue-400 flex flex-row items-center justify-center p-2 gap-4">
+                    <span className="text-3xl">🏰</span>
+                    <h2 className="text-xl text-yellow-300 whitespace-nowrap">
+                        {t.town.welcome.split(' ')[2] || 'Town'}
+                    </h2>
+                </RetroWindow>
+                <div className="flex-1">
+                    <StatusPanel player={player} t={t} />
+                </div>
+            </div>
+            {renderRightSide()}
+        </div>
     );
   };
 
